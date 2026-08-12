@@ -1,1 +1,2 @@
-export const load=({locals})=>({user:locals.user,isAdmin:locals.isAdmin});
+import { redirect } from '@sveltejs/kit';
+export const load=({locals})=>{if(locals.user) throw redirect(303,'/exam');return {user:null,isAdmin:false};};
