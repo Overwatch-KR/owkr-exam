@@ -1,0 +1,2 @@
+import { redirect } from '@sveltejs/kit'; import { oauthState } from '$lib/server/auth';
+export const GET=({cookies})=>{const state=oauthState();cookies.set('discord_oauth_state',state,{path:'/',httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',maxAge:600});const p=new URLSearchParams({client_id:process.env.DISCORD_CLIENT_ID||'',redirect_uri:process.env.DISCORD_REDIRECT_URI||'',response_type:'code',scope:'identify',state});throw redirect(302,`https://discord.com/oauth2/authorize?${p}`)};

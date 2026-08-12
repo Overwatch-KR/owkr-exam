@@ -1,0 +1,2 @@
+import type { Handle } from '@sveltejs/kit'; import { getSession,isAdmin } from '$lib/server/auth';
+export const handle:Handle=async({event,resolve})=>{event.locals.user=getSession(event.cookies);event.locals.isAdmin=!!event.locals.user&&isAdmin(event.locals.user.id);const response=await resolve(event);if(event.url.pathname.startsWith('/exam')||event.url.pathname.startsWith('/api/exam'))response.headers.set('Cache-Control','no-store, private');return response};
