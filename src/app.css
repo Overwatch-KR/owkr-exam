@@ -1,30 +1,33 @@
 @import 'tailwindcss';
 
 @theme {
-	--color-ink: #171717;
-	--color-muted: #6b7280;
-	--color-paper: #f4f4f2;
-	--color-line: #d7d7d2;
-	--color-navy: #184a78;
-	--color-sky: #edf5fb;
+	--color-ink: #172331;
+	--color-muted: #657381;
+	--color-paper: #eef2f5;
+	--color-line: #cbd5dc;
+	--color-navy: #123d61;
+	--color-sky: #dff2fb;
+	--color-panel: #edf8fd;
+	--color-accent: #e78928;
 }
 
 @layer base {
 	* { box-sizing: border-box; }
 	body { @apply bg-paper text-ink antialiased; font-family: Arial, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
 	button { @apply cursor-pointer; }
-	input, textarea, select { @apply rounded-none border border-line bg-white px-3 py-2.5 outline-none transition focus:border-navy focus:ring-1 focus:ring-navy; }
+	input, textarea, select { @apply rounded-sm border border-line bg-white px-3 py-2.5 outline-none transition focus:border-navy focus:ring-2 focus:ring-sky; }
 	textarea { resize: vertical; }
 }
 
 @layer components {
-	.wordmark { @apply text-[15px] font-bold tracking-[0.16em] text-ink; }
-	.wordmark-mark { @apply mr-2 inline-flex h-5 w-5 items-center justify-center bg-ink text-[10px] font-black tracking-normal text-white; }
-	.card { @apply border border-line bg-white; }
-	.btn { @apply inline-flex items-center justify-center rounded-none bg-ink px-4 py-2.5 text-sm font-bold text-white transition hover:bg-navy disabled:cursor-not-allowed disabled:opacity-50; }
-	.btn-secondary { @apply inline-flex items-center justify-center rounded-none border border-ink bg-white px-4 py-2.5 text-sm font-bold text-ink transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50; }
-	.label { @apply mb-1.5 block text-xs font-bold tracking-wide text-stone-700; }
-	.badge { @apply inline-flex items-center border border-line px-2 py-1 text-[11px] font-bold text-stone-600; }
-	.eyebrow { @apply text-[11px] font-bold tracking-[0.16em] text-navy; }
-	.table-head { @apply border-y border-ink bg-stone-100 text-left text-[11px] font-bold tracking-wide text-stone-600; }
+	.wordmark { @apply text-[15px] font-bold tracking-[0.08em] text-white; }
+	.wordmark-mark { @apply mr-2 inline-flex h-6 w-6 items-center justify-center rounded-sm bg-accent text-[11px] font-black tracking-normal text-white; }
+	.card { @apply rounded-sm border border-line bg-white shadow-sm; }
+	.btn { @apply inline-flex items-center justify-center rounded-sm bg-navy px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#0c2d48] disabled:cursor-not-allowed disabled:opacity-50; }
+	.btn-secondary { @apply inline-flex items-center justify-center rounded-sm border border-[#9eb4c2] bg-white px-4 py-2.5 text-sm font-bold text-ink transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50; }
+	.label { @apply mb-1.5 block text-xs font-bold tracking-wide text-slate-700; }
+	.badge { @apply inline-flex items-center rounded-full border border-sky-300 bg-sky px-2 py-1 text-[11px] font-bold text-navy; }
+	.eyebrow { @apply text-[11px] font-bold tracking-[0.12em] text-[#487897]; }
+	.table-head { @apply border-y border-[#9eb4c2] bg-[#e8f2f7] text-left text-[11px] font-bold tracking-wide text-[#456274]; }
+	.site-header { @apply bg-navy; }
 }
