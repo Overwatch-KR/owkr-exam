@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { preloadData } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import QuestionEditor from '$lib/components/question-editor.svelte';
 
 	type ConflictQuestion = {
@@ -45,6 +47,27 @@
 		toast = { tone: actionForm.success ? 'success' : 'error', message };
 		const timeout = setTimeout(() => (toast = null), 4500);
 		return () => clearTimeout(timeout);
+	});
+
+	onMount(() => {
+		const sections = [
+			'/admin/overview',
+			'/admin/results',
+			'/admin/codes',
+			'/admin/questions',
+			'/admin/question-new'
+		];
+		void Promise.all(
+			sections
+				.filter((section) => section !== `/admin/${tab}`)
+				.map(async (section) => {
+					try {
+						await preloadData(section);
+					} catch {
+						// A normal navigation will retry if a background preload fails.
+					}
+				})
+		);
 	});
 </script>
 
