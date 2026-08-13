@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { executeContract, implementMutation } from 'boundra';
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { startExamMutation } from '$lib/domains/exam/shared/public';
 import { ExamRequestError, examRequestError } from '$lib/domains/exam/server/public';
 import { database } from '$lib/server/db';
@@ -49,12 +49,15 @@ export const POST = async (e) => {
 							.select()
 							.from(questions)
 							.where(eq(questions.active, true))
-							.orderBy(asc(questions.sortOrder));
+							.orderBy(
+								sql`case when ${questions.type} = 'essay' and ${questions.sortOrder} = 35 then 1 else 0 end`,
+								asc(questions.sortOrder)
+							);
 						if (!sourceQuestions.length) {
 							throw new ExamRequestError(400, '등록된 활성 문제가 없습니다.');
 						}
 						await tx.insert(examQuestions).values(
-							sourceQuestions.map((question) => ({
+							sourceQuestions.map((question, index) => ({
 								attemptId: attempt.id,
 								sourceQuestionId: question.id,
 								type: question.type,
@@ -62,7 +65,8 @@ export const POST = async (e) => {
 								options: question.options,
 								correctAnswer: question.correctAnswer,
 								points: question.points,
-								sortOrder: question.sortOrder
+								// Save the resolved order so this attempt remains unchanged later.
+								sortOrder: index + 1
 							}))
 						);
 						if (!code.reusable) {
@@ -76,7 +80,10 @@ export const POST = async (e) => {
 						.select()
 						.from(examQuestions)
 						.where(eq(examQuestions.attemptId, attempt.id))
-						.orderBy(asc(examQuestions.sortOrder));
+						.orderBy(
+							sql`case when ${examQuestions.type} = 'essay' and ${examQuestions.sortOrder} = 35 then 1 else 0 end`,
+							asc(examQuestions.sortOrder)
+						);
 					const savedAnswers = examQuestionRows.length
 						? await tx
 								.select()
