@@ -320,8 +320,8 @@
 													class="text-xs font-semibold text-stone-500">비활성</span
 												>{/if}
 										</div>
-										<div class="flex flex-wrap items-center gap-3">
-											<div class="flex items-center gap-3">
+										<div class="flex w-full flex-wrap items-center justify-between gap-3">
+											<div class="flex items-center gap-2">
 												{#if questionConflict}
 													<a
 														href={`/admin/questions?question=${data.selectedQuestion.id}#question-detail`}
@@ -340,14 +340,13 @@
 												<a
 													href="/admin/questions"
 													onclick={closeQuestion}
-													class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
-													>상세 닫기</a
+													class="btn-secondary h-8 px-3 text-xs">상세 닫기</a
 												>
 											</div>
 											<button
 												type="button"
 												onclick={() => (deleteQuestionOpen = true)}
-												class="border-l border-[#dfe4e9] pl-3 text-xs font-semibold text-red-700 underline underline-offset-4"
+												class="h-8 border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-700 transition hover:bg-red-100"
 											>
 												문제 삭제
 											</button>
@@ -663,7 +662,7 @@
 										<a
 											href="/admin/results"
 											data-sveltekit-reload
-											class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
+											class="px-2 py-2 text-xs font-semibold text-[#087ba8] hover:underline"
 											>← 응시자 목록</a
 										>
 										<h2 class="mt-4 text-2xl font-bold tracking-[-.03em]">
