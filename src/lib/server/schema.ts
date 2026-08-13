@@ -6,6 +6,7 @@ import {
 	jsonb,
 	boolean,
 	uuid,
+	index,
 	uniqueIndex
 } from 'drizzle-orm/pg-core';
 
@@ -28,6 +29,7 @@ export const examCodes = pgTable('exam_codes', {
 	code: text('code').notNull().unique(),
 	discordId: text('discord_id').notNull(),
 	status: text('status').notNull().default('unused'),
+	reusable: boolean('reusable').notNull().default(false),
 	createdAt: timestamp('created_at').notNull().defaultNow(),
 	startedAt: timestamp('started_at'),
 	completedAt: timestamp('completed_at')
@@ -51,7 +53,7 @@ export const attempts = pgTable(
 		subjectiveScore: integer('subjective_score'),
 		totalScore: integer('total_score')
 	},
-	(t) => [uniqueIndex('attempt_code_once').on(t.codeId)]
+	(t) => [index('attempt_code_id_idx').on(t.codeId)]
 );
 export const examQuestions = pgTable('exam_questions', {
 	id: uuid('id').defaultRandom().primaryKey(),

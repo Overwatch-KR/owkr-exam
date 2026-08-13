@@ -46,7 +46,7 @@ export async function closeAttempt(id: string, timedOut = false) {
 		await db
 			.update(examCodes)
 			.set({ status: 'completed', completedAt: now })
-			.where(eq(examCodes.id, updated.codeId));
+			.where(and(eq(examCodes.id, updated.codeId), eq(examCodes.reusable, false)));
 	}
 	return updated || attempt;
 }

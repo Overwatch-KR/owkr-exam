@@ -311,7 +311,7 @@ export const actions = {
 			await tx
 				.update(examCodes)
 				.set({ status: 'expired' })
-				.where(eq(examCodes.id, removed[0].codeId));
+				.where(and(eq(examCodes.id, removed[0].codeId), eq(examCodes.reusable, false)));
 			return removed[0];
 		});
 		if (!deleted) return fail(404, { message: '삭제할 응시 결과를 찾지 못했습니다.' });
@@ -322,10 +322,11 @@ export const actions = {
 	expireCode: async (event) => {
 		admin(event);
 		const data = await event.request.formData();
-		await database()
-			.update(examCodes)
-			.set({ status: 'expired' })
-			.where(eq(examCodes.id, String(data.get('id'))));
+		const id = String(data.get('id'));
+		const [code] = await database().select().from(examCodes).where(eq(examCodes.id, id));
+		if (!code) return fail(404, { message: '폐기할 응시 코드를 찾지 못했습니다.' });
+		if (code.reusable) return fail(400, { message: '반복 사용 테스트 코드는 폐기할 수 없습니다.' });
+		await database().update(examCodes).set({ status: 'expired' }).where(eq(examCodes.id, id));
 		return { success: '코드를 폐기했습니다.' };
 	}
 };

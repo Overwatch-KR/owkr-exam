@@ -495,10 +495,12 @@
 									<tr class="border-line border-b">
 										<td class="p-3 font-mono font-bold tracking-widest">{c.code}</td>
 										<td class="p-3 font-mono text-xs">{c.discordId}</td>
-										<td class="p-3"><span class="badge">{c.status}</span></td>
+										<td class="p-3">
+											<span class="badge">{c.reusable ? '테스트 · 반복 사용' : c.status}</span>
+										</td>
 										<td class="p-3 text-xs">{c.createdAt.toLocaleString('ko-KR')}</td>
 										<td class="p-3">
-											{#if c.status === 'unused'}
+											{#if c.status === 'unused' && !c.reusable}
 												<form method="POST" action="?/expireCode">
 													<input name="id" type="hidden" value={c.id} />
 													<button

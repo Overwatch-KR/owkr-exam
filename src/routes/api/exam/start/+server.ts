@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { executeContract, implementMutation } from 'boundra';
-import { asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { startExamMutation } from '$lib/domains/exam/shared/public';
 import { ExamRequestError, examRequestError } from '$lib/domains/exam/server/public';
 import { database } from '$lib/server/db';
@@ -23,9 +23,12 @@ export const POST = async (e) => {
 					if (code.discordId !== u.id) {
 						throw new ExamRequestError(403, '다른 Discord 계정에 발급된 코드입니다.');
 					}
-					let [attempt] = await tx.select().from(attempts).where(eq(attempts.codeId, code.id));
+					let [attempt] = await tx
+						.select()
+						.from(attempts)
+						.where(and(eq(attempts.codeId, code.id), isNull(attempts.submittedAt)));
 					if (!attempt) {
-						if (code.status !== 'unused') {
+						if (!code.reusable && code.status !== 'unused') {
 							throw new ExamRequestError(409, '이미 사용되었거나 만료된 코드입니다.');
 						}
 						const now = new Date();
@@ -62,13 +65,12 @@ export const POST = async (e) => {
 								sortOrder: question.sortOrder
 							}))
 						);
-						await tx
-							.update(examCodes)
-							.set({ status: 'in_progress', startedAt: now })
-							.where(eq(examCodes.id, code.id));
-					}
-					if (attempt.submittedAt) {
-						throw new ExamRequestError(409, '이미 제출된 시험입니다.');
+						if (!code.reusable) {
+							await tx
+								.update(examCodes)
+								.set({ status: 'in_progress', startedAt: now })
+								.where(eq(examCodes.id, code.id));
+						}
 					}
 					const examQuestionRows = await tx
 						.select()
