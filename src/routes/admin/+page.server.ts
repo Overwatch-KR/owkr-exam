@@ -52,14 +52,50 @@ export const load = async (event) => {
 		const legacySection = event.url.searchParams.get('tab');
 		const target = ['questions', 'codes', 'results'].includes(legacySection || '')
 			? legacySection
-			: 'questions';
+			: 'overview';
 		const attempt = target === 'results' ? event.url.searchParams.get('attempt') : null;
 		redirect(307, `/admin/${target}${attempt ? `?attempt=${encodeURIComponent(attempt)}` : ''}`);
 	}
-	if (!['questions', 'codes', 'results'].includes(section)) {
+	if (!['overview', 'questions', 'codes', 'results'].includes(section)) {
 		error(404, '관리자 메뉴를 찾을 수 없습니다.');
 	}
 	const db = database();
+	if (section === 'overview') {
+		const [allAttempts, allCodes, recentCodes] = await Promise.all([
+			db.select().from(attempts).orderBy(desc(attempts.startedAt)),
+			db.select().from(examCodes),
+			db.select().from(examCodes).orderBy(desc(examCodes.createdAt)).limit(5)
+		]);
+		const needsGrading = allAttempts.filter((item) => item.submittedAt && item.totalScore === null);
+		return {
+			section,
+			overview: {
+				inProgress: allAttempts.filter((item) => !item.submittedAt).length,
+				needsGradingCount: needsGrading.length,
+				completed: allAttempts.filter((item) => item.totalScore !== null).length,
+				unusedCodes: allCodes.filter((item) => item.status === 'unused').length,
+				needsGrading: needsGrading.slice(0, 6),
+				recentCodes
+			}
+		};
+	}
+
+	if (section === 'questions') {
+		const allQuestions = await db.select().from(questions).orderBy(asc(questions.sortOrder));
+		const selectedQuestionId = event.url.searchParams.get('question');
+		return {
+			section,
+			questions: allQuestions,
+			selectedQuestion: selectedQuestionId
+				? allQuestions.find((question) => question.id === selectedQuestionId) || null
+				: null
+		};
+	}
+
+	if (section === 'codes') {
+		return { section, codes: await db.select().from(examCodes).orderBy(desc(examCodes.createdAt)) };
+	}
+
 	const allAttempts = await db.select().from(attempts).orderBy(desc(attempts.startedAt));
 	const selectedAttemptId = section === 'results' ? event.url.searchParams.get('attempt') : null;
 	const gradingAttempt = selectedAttemptId
@@ -107,17 +143,8 @@ export const load = async (event) => {
 		};
 	}
 
-	const allQuestions = await db.select().from(questions).orderBy(asc(questions.sortOrder));
-	const selectedQuestionId =
-		section === 'questions' ? event.url.searchParams.get('question') : null;
-
 	return {
 		section,
-		questions: allQuestions,
-		selectedQuestion: selectedQuestionId
-			? allQuestions.find((question) => question.id === selectedQuestionId) || null
-			: null,
-		codes: await db.select().from(examCodes).orderBy(desc(examCodes.createdAt)),
 		attempts: allAttempts,
 		grading
 	};

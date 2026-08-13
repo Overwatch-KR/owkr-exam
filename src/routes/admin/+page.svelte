@@ -33,15 +33,26 @@
 
 		<nav class="flex overflow-x-auto border-b border-[#c8d0d9]" aria-label="관리자 메뉴">
 			<a
-				href="/admin/questions"
+				href="/admin/overview"
+				data-sveltekit-preload-data="hover"
 				class="shrink-0 border-b-2 px-5 py-3 text-sm font-semibold transition-colors"
-				class:border-[#087ba8]={tab === 'questions'}
-				class:text-[#087ba8]={tab === 'questions'}
-				class:border-transparent={tab !== 'questions'}
-				aria-current={tab === 'questions' ? 'page' : undefined}>문제 관리</a
+				class:border-[#087ba8]={tab === 'overview'}
+				class:text-[#087ba8]={tab === 'overview'}
+				class:border-transparent={tab !== 'overview'}
+				aria-current={tab === 'overview' ? 'page' : undefined}>개요</a
+			>
+			<a
+				href="/admin/results"
+				data-sveltekit-preload-data="hover"
+				class="shrink-0 border-b-2 px-5 py-3 text-sm font-semibold transition-colors"
+				class:border-[#087ba8]={tab === 'results'}
+				class:text-[#087ba8]={tab === 'results'}
+				class:border-transparent={tab !== 'results'}
+				aria-current={tab === 'results' ? 'page' : undefined}>응시 결과</a
 			>
 			<a
 				href="/admin/codes"
+				data-sveltekit-preload-data="hover"
 				class="shrink-0 border-b-2 px-5 py-3 text-sm font-semibold transition-colors"
 				class:border-[#087ba8]={tab === 'codes'}
 				class:text-[#087ba8]={tab === 'codes'}
@@ -49,12 +60,13 @@
 				aria-current={tab === 'codes' ? 'page' : undefined}>응시 코드</a
 			>
 			<a
-				href="/admin/results"
+				href="/admin/questions"
+				data-sveltekit-preload-data="hover"
 				class="shrink-0 border-b-2 px-5 py-3 text-sm font-semibold transition-colors"
-				class:border-[#087ba8]={tab === 'results'}
-				class:text-[#087ba8]={tab === 'results'}
-				class:border-transparent={tab !== 'results'}
-				aria-current={tab === 'results' ? 'page' : undefined}>응시 결과</a
+				class:border-[#087ba8]={tab === 'questions'}
+				class:text-[#087ba8]={tab === 'questions'}
+				class:border-transparent={tab !== 'questions'}
+				aria-current={tab === 'questions' ? 'page' : undefined}>문제 관리</a
 			>
 		</nav>
 
@@ -68,7 +80,113 @@
 			</p>
 		{/if}
 
-		{#if tab === 'questions'}
+		{#if tab === 'overview' && data.overview}
+			<section class="py-8">
+				<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+					<div class="card p-5">
+						<p class="text-xs font-semibold text-[#6a7684]">채점 필요</p>
+						<p class="mt-2 font-mono text-3xl font-bold text-[#087ba8]">
+							{data.overview.needsGradingCount}
+						</p>
+						<p class="mt-1 text-xs text-[#6a7684]">제출된 답안 중 검토 대기</p>
+					</div>
+					<div class="card p-5">
+						<p class="text-xs font-semibold text-[#6a7684]">응시 중</p>
+						<p class="mt-2 font-mono text-3xl font-bold">{data.overview.inProgress}</p>
+						<p class="mt-1 text-xs text-[#6a7684]">제출 전 시험 진행 중</p>
+					</div>
+					<div class="card p-5">
+						<p class="text-xs font-semibold text-[#6a7684]">채점 완료</p>
+						<p class="mt-2 font-mono text-3xl font-bold">{data.overview.completed}</p>
+						<p class="mt-1 text-xs text-[#6a7684]">최종 점수 확정</p>
+					</div>
+					<div class="card p-5">
+						<p class="text-xs font-semibold text-[#6a7684]">미사용 코드</p>
+						<p class="mt-2 font-mono text-3xl font-bold">{data.overview.unusedCodes}</p>
+						<p class="mt-1 text-xs text-[#6a7684]">새 응시자에게 발급 가능</p>
+					</div>
+				</div>
+
+				<div class="mt-8 grid gap-8 lg:grid-cols-[1fr_.8fr]">
+					<section>
+						<div class="mb-3 flex items-center justify-between">
+							<div>
+								<h2 class="text-lg font-bold">채점이 필요한 응시자</h2>
+								<p class="mt-1 text-xs text-[#6a7684]">제출된 순서대로 확인하세요.</p>
+							</div>
+							<a
+								href="/admin/results"
+								class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
+								>전체 결과</a
+							>
+						</div>
+						<div class="border-ink overflow-x-auto border-t">
+							<table class="w-full min-w-[560px] text-left text-sm">
+								<thead class="table-head"
+									><tr
+										><th class="p-3">지원자</th><th class="p-3">제출 시각</th><th class="p-3"
+											>객관식</th
+										><th class="p-3"></th></tr
+									></thead
+								><tbody
+									>{#each data.overview.needsGrading as attempt}<tr class="border-line border-b"
+											><td class="p-3 font-semibold">{attempt.displayName}</td><td
+												class="p-3 text-xs text-[#6a7684]"
+												>{attempt.submittedAt?.toLocaleString('ko-KR')}</td
+											><td class="p-3">{attempt.objectiveScore}</td><td class="p-3"
+												><a
+													href={`/admin/results?attempt=${attempt.id}`}
+													class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
+													>채점하기</a
+												></td
+											></tr
+										>{:else}<tr
+											><td colspan="4" class="p-6 text-center text-sm text-[#6a7684]"
+												>현재 채점이 필요한 답안이 없습니다.</td
+											></tr
+										>{/each}</tbody
+								>
+							</table>
+						</div>
+					</section>
+					<section>
+						<div class="mb-3 flex items-center justify-between">
+							<div>
+								<h2 class="text-lg font-bold">최근 발급 코드</h2>
+								<p class="mt-1 text-xs text-[#6a7684]">최근 생성된 응시 코드입니다.</p>
+							</div>
+							<a
+								href="/admin/codes"
+								class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
+								>코드 관리</a
+							>
+						</div>
+						<div class="border-ink overflow-x-auto border-t">
+							<table class="w-full min-w-[460px] text-left text-sm">
+								<thead class="table-head"
+									><tr
+										><th class="p-3">코드</th><th class="p-3">상태</th><th class="p-3">발급 시각</th
+										></tr
+									></thead
+								><tbody
+									>{#each data.overview.recentCodes as item}<tr class="border-line border-b"
+											><td class="p-3 font-mono font-bold tracking-widest">{item.code}</td><td
+												class="p-3"><span class="badge">{item.status}</span></td
+											><td class="p-3 text-xs text-[#6a7684]"
+												>{item.createdAt.toLocaleString('ko-KR')}</td
+											></tr
+										>{:else}<tr
+											><td colspan="3" class="p-6 text-center text-sm text-[#6a7684]"
+												>발급한 코드가 없습니다.</td
+											></tr
+										>{/each}</tbody
+								>
+							</table>
+						</div>
+					</section>
+				</div>
+			</section>
+		{:else if tab === 'questions'}
 			<section class="space-y-8 py-8">
 				<div>
 					<div class="mb-3">
@@ -208,7 +326,7 @@
 					{/if}
 					<div class="mb-3 flex items-baseline justify-between">
 						<h2 class="text-lg font-bold">등록된 문제</h2>
-						<span class="text-xs text-stone-500">총 {data.questions.length}문항</span>
+						<span class="text-xs text-stone-500">총 {data.questions?.length ?? 0}문항</span>
 					</div>
 					<div class="border-ink overflow-x-auto border-t">
 						<table class="w-full min-w-[820px] table-fixed text-left text-sm">
@@ -228,7 +346,7 @@
 								</tr>
 							</thead>
 							<tbody>
-								{#each data.questions as q}
+								{#each data.questions ?? [] as q}
 									<tr class="border-line border-b align-top" class:opacity-40={!q.active}>
 										<td class="p-3 font-mono">{q.sortOrder}</td>
 										<td class="min-w-0 p-3"
@@ -297,7 +415,7 @@
 				<div>
 					<div class="mb-3 flex items-baseline justify-between">
 						<h2 class="text-lg font-bold">발급 이력</h2>
-						<span class="text-xs text-stone-500">총 {data.codes.length}건</span>
+						<span class="text-xs text-stone-500">총 {data.codes?.length ?? 0}건</span>
 					</div>
 					<div class="border-ink overflow-x-auto border-t">
 						<table class="w-full min-w-[650px] text-left text-sm">
@@ -311,7 +429,7 @@
 								</tr>
 							</thead>
 							<tbody>
-								{#each data.codes as c}
+								{#each data.codes ?? [] as c}
 									<tr class="border-line border-b">
 										<td class="p-3 font-mono font-bold tracking-widest">{c.code}</td>
 										<td class="p-3 font-mono text-xs">{c.discordId}</td>
@@ -476,7 +594,7 @@
 
 				<div class="mb-3 flex items-baseline justify-between">
 					<h2 class="text-lg font-bold">응시 결과</h2>
-					<span class="text-xs text-stone-500">총 {data.attempts.length}명</span>
+					<span class="text-xs text-stone-500">총 {data.attempts?.length ?? 0}명</span>
 				</div>
 				<div class="border-ink overflow-x-auto border-t">
 					<table class="w-full min-w-[850px] text-left text-sm">
@@ -493,7 +611,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each data.attempts as a}
+							{#each data.attempts ?? [] as a}
 								<tr class="border-line border-b">
 									<td class="p-3 font-semibold">{a.displayName}</td>
 									<td class="p-3 font-mono text-xs">{a.discordId}</td>
