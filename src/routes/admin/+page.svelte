@@ -249,8 +249,8 @@
 				</div>
 			</section>
 		{:else if tab === 'question-new'}
-			<section class="max-w-4xl py-8">
-				<div class="mb-5">
+			<section class="py-8">
+				<div class="mb-5 max-w-3xl">
 					<h2 class="text-lg font-bold">새 문제 등록</h2>
 					<p class="mt-1 text-xs leading-5 text-stone-500">
 						문제 유형을 먼저 고르면 필요한 항목만 표시됩니다. 이미 시험을 시작한 응시자의 문제

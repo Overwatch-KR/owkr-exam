@@ -83,7 +83,7 @@
 		</div>
 	</fieldset>
 
-	<div class="mt-5 grid gap-5 lg:grid-cols-[1fr_150px]">
+	<div class="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_180px]">
 		<div>
 			<label class="label" for={`content-${question?.id || 'new'}`}>문제 내용</label>
 			<textarea
