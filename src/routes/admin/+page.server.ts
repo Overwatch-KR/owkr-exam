@@ -4,6 +4,7 @@ import { admin } from '$lib/server/guard';
 import { database } from '$lib/server/db';
 import { answers, attempts, examCodes, examQuestions, questions } from '$lib/server/schema';
 import { adminSections, loadAdminSection, type AdminSection } from '$lib/server/admin-dashboard';
+import { invalidateExamConfig } from '$lib/server/exam-config';
 
 const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const make = () =>
@@ -82,6 +83,7 @@ export const actions = {
 			updatedById: editor.id,
 			updatedByName: editor.displayName
 		});
+		invalidateExamConfig();
 		return { success: '문제가 등록되었습니다.' };
 	},
 	updateQuestion: async (event) => {
@@ -122,6 +124,7 @@ export const actions = {
 				conflict: latest ? { latest, draft: parsed.value } : undefined
 			});
 		}
+		invalidateExamConfig();
 		return { success: '문제를 수정했습니다.' };
 	},
 	grade: async (event) => {
@@ -209,6 +212,7 @@ export const actions = {
 		await database()
 			.delete(questions)
 			.where(eq(questions.id, String(data.get('id'))));
+		invalidateExamConfig();
 		return { success: '문제를 삭제했습니다.' };
 	},
 	deleteAttempt: async (event) => {

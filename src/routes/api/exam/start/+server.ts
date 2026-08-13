@@ -9,6 +9,7 @@ import { user } from '$lib/server/guard';
 
 export const POST = async (e) => {
 	const u = user(e);
+	const requestStartedAt = performance.now();
 	try {
 		const result = await executeContract(
 			implementMutation(startExamMutation, async ({ code: examCode }) => {
@@ -112,7 +113,11 @@ export const POST = async (e) => {
 			}),
 			await e.request.json()
 		);
-		return json(result);
+		const duration = performance.now() - requestStartedAt;
+		console.info('exam_start_completed', { durationMs: Math.round(duration) });
+		return json(result, {
+			headers: { 'Server-Timing': `exam-start;dur=${duration.toFixed(1)}` }
+		});
 	} catch (err) {
 		const requestError = examRequestError(err, '올바른 6자리 코드를 입력해 주세요.');
 		if (requestError)

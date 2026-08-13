@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { useQueryClient } from '@tanstack/svelte-query';
-	import { pushState } from '$app/navigation';
-	import { onMount, untrack } from 'svelte';
+	import { goto, pushState } from '$app/navigation';
+	import { untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { codeStatusLabel, questionTypeLabel } from '$lib/admin/presentation';
 	import QuestionEditor from '$lib/components/question-editor.svelte';
@@ -56,7 +56,6 @@
 		else toast.error(message);
 	});
 
-	const sections: AdminSection[] = ['overview', 'results', 'codes', 'questions', 'question-new'];
 	const key = (section: AdminSection) => ['admin-section', section] as const;
 
 	function reviveDates(value: unknown): unknown {
@@ -88,12 +87,8 @@
 		}
 		tabLoading = true;
 		try {
-			data = await queryClient.fetchQuery({
-				queryKey: key(section),
-				queryFn: () => fetchSection(section),
-				staleTime: 5 * 60_000
-			});
-			pushState(`/admin/${section}`, {});
+			// First visits use SvelteKit navigation so URL, server data, and form actions stay in sync.
+			await goto(`/admin/${section}`);
 		} catch {
 			activeSection = tab;
 			toast.error('관리자 데이터를 불러오지 못했습니다. 다시 시도해 주세요.');
@@ -102,20 +97,37 @@
 		}
 	}
 
-	onMount(() => {
-		queryClient.setQueryData(key(tab), data);
-		void Promise.all(
-			sections
-				.filter((section) => section !== tab)
-				.map((section) =>
-					queryClient.prefetchQuery({
-						queryKey: key(section),
-						queryFn: () => fetchSection(section),
-						staleTime: 5 * 60_000
-					})
-				)
-		);
-	});
+	function openQuestion(event: MouseEvent, question: NonNullable<typeof data.questions>[number]) {
+		event.preventDefault();
+		if (tab !== 'questions' || !data.questions) return;
+		editingQuestion = false;
+		data = { ...data, selectedQuestion: question } as typeof initialData;
+		pushState(`/admin/questions?question=${question.id}#question-detail`, {});
+		void refreshQuestionList(question.id);
+	}
+
+	function closeQuestion(event: MouseEvent) {
+		event.preventDefault();
+		if (tab !== 'questions') return;
+		editingQuestion = false;
+		data = { ...data, selectedQuestion: null } as typeof initialData;
+		pushState('/admin/questions', {});
+	}
+
+	async function refreshQuestionList(selectedQuestionId: string) {
+		try {
+			const refreshed = await fetchSection('questions');
+			queryClient.setQueryData(key('questions'), refreshed);
+			if (
+				tab === 'questions' &&
+				new URL(location.href).searchParams.get('question') === selectedQuestionId
+			) {
+				data = refreshed;
+			}
+		} catch {
+			// The cached list is still usable; a future tab visit will retry the refresh.
+		}
+	}
 </script>
 
 <main class="min-h-screen bg-[#f7f8fa]">
@@ -332,6 +344,7 @@
 									{#if questionConflict}
 										<a
 											href={`/admin/questions?question=${data.selectedQuestion.id}#question-detail`}
+											onclick={closeQuestion}
 											class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
 											>최신본으로 돌아가기</a
 										>
@@ -345,6 +358,7 @@
 									{/if}
 									<a
 										href="/admin/questions"
+										onclick={closeQuestion}
 										class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
 										>상세 닫기</a
 									>
@@ -511,6 +525,7 @@
 										<td class="min-w-0 p-3"
 											><a
 												href={`/admin/questions?question=${q.id}#question-detail`}
+												onclick={(event) => openQuestion(event, q)}
 												class="text-ink block truncate leading-6 font-semibold underline decoration-[#b7dce9] underline-offset-4 hover:text-[#087ba8]"
 												title={q.content}>{q.content}</a
 											>
@@ -533,6 +548,7 @@
 											<div class="flex items-center gap-3">
 												<a
 													href={`/admin/questions?question=${q.id}#question-detail`}
+													onclick={(event) => openQuestion(event, q)}
 													class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
 													>상세</a
 												>
