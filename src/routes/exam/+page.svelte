@@ -20,7 +20,7 @@
 	let attempt = $state<ExamSession | null>(null);
 	let index = $state(0);
 	let values = $state<Record<string, string>>({});
-	let saving = $state('');
+	let saveError = $state('');
 	let remaining = $state(0);
 	let confirm = $state(false);
 	let q = $derived(attempt?.questions[index]);
@@ -37,6 +37,25 @@
 		const onPop = () => location.replace('/exam');
 		const onKeydown = (event: KeyboardEvent) => {
 			if (event.key === 'Escape' && confirm) confirm = false;
+			if (!attempt || attempt.submittedAt || confirm) return;
+			if (event.key === 'Enter' && event.shiftKey) {
+				event.preventDefault();
+				goNext();
+				return;
+			}
+			const target = event.target as HTMLElement | null;
+			const isTyping = Boolean(
+				target?.closest('textarea, select, [contenteditable="true"], input:not([type="radio"])')
+			);
+			if (
+				!isTyping &&
+				!event.ctrlKey &&
+				!event.metaKey &&
+				!event.altKey &&
+				/^[1-5]$/.test(event.key)
+			) {
+				selectChoice(Number(event.key) - 1);
+			}
 		};
 		addEventListener('pageshow', onShow);
 		addEventListener('popstate', onPop);
@@ -72,14 +91,23 @@
 	function save(id: string) {
 		clearTimeout(timers[id]);
 		timers[id] = setTimeout(async () => {
-			saving = '저장 중';
 			try {
 				await saveAnswer({ attemptQuestionId: id, value: values[id] ?? '' });
-				saving = '저장됨';
+				saveError = '';
 			} catch {
-				saving = '저장 실패';
+				saveError = '답안을 저장하지 못했습니다. 네트워크를 확인한 뒤 다시 입력해 주세요.';
 			}
 		}, 500);
+	}
+
+	function goNext() {
+		if (attempt && index < attempt.questions.length - 1) index += 1;
+	}
+
+	function selectChoice(optionIndex: number) {
+		if (!q || q.type !== 'multiple' || optionIndex >= q.options.length) return;
+		values[q.id] = String(optionIndex);
+		save(q.id);
 	}
 
 	async function submit(timeout = false) {
@@ -170,7 +198,7 @@
 					객관식 점수만 즉시 공개됩니다. 단답·서술·논술형 점수와 총점은 운영진만 확인하며, 제출
 					이후에는 답안을 변경할 수 없습니다.
 				</p>
-				<a href="/" class="btn mt-8">메인으로 돌아가기</a>
+				<p class="mt-8 text-sm font-semibold text-[#34404d]">이 페이지를 종료해도 됩니다.</p>
 			</div>
 		</section>
 	</main>
@@ -191,12 +219,12 @@
 					<p class="text-sm font-semibold">OWKR 관리자 선발시험</p>
 					<p class="mt-1 text-xs text-[#6a7684]">문제 {index + 1} / {attempt.questions.length}</p>
 				</div>
-				<span class="text-xs text-[#6a7684]" aria-live="polite"
-					>{saving || '답안은 자동 저장됩니다.'}</span
-				>
+				{#if saveError}<p role="alert" class="text-xs font-semibold text-red-700">
+						{saveError}
+					</p>{/if}
 			</div>
 			<div class="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
-				<aside class="card h-fit p-4">
+				<aside class="card h-fit p-4 lg:sticky lg:top-5">
 					<p class="mb-3 text-xs font-semibold text-[#34404d]">문항 목록</p>
 					<div class="grid grid-cols-5 gap-1.5">
 						{#each attempt.questions as item, i}
@@ -215,6 +243,9 @@
 					</div>
 					<p class="mt-3 text-[11px] leading-5 text-[#6a7684]">
 						연한 파랑: 답변 저장됨<br />진한 파랑: 현재 문제
+					</p>
+					<p class="mt-3 border-t border-[#dfe4e9] pt-3 text-[11px] leading-5 text-[#6a7684]">
+						Shift + Enter: 다음 문제<br />1–5: 객관식 선택
 					</p>
 					<button type="button" class="btn mt-6 w-full" onclick={() => (confirm = true)}
 						>시험 제출</button
@@ -266,7 +297,7 @@
 								type="button"
 								class="btn-secondary"
 								disabled={index === attempt.questions.length - 1}
-								onclick={() => index++}
+								onclick={goNext}
 								>다음 문제 →
 							</button>
 						</div>
