@@ -9,6 +9,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (
 		event.url.pathname.startsWith('/exam') ||
 		event.url.pathname.startsWith('/admin') ||
+		event.url.pathname.startsWith('/api/admin') ||
 		event.url.pathname.startsWith('/api/exam')
 	)
 		response.headers.set('Cache-Control', 'no-store, private');

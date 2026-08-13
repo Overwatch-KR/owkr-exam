@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { preloadData } from '$app/navigation';
-	import { onMount } from 'svelte';
+	import { useQueryClient } from '@tanstack/svelte-query';
+	import { onMount, untrack } from 'svelte';
 	import { codeStatusLabel, questionTypeLabel } from '$lib/admin/presentation';
 	import AdminToast from '$lib/components/admin-toast.svelte';
 	import QuestionEditor from '$lib/components/question-editor.svelte';
@@ -23,9 +23,15 @@
 		success?: string;
 		conflict?: QuestionConflict;
 	};
+	type AdminSection = 'overview' | 'results' | 'codes' | 'questions' | 'question-new';
 
-	let { data, form } = $props();
-	const tab = $derived(data.section);
+	let { data: initialData, form } = $props();
+	let data = $state(untrack(() => initialData));
+	const sectionOf = (payload: typeof initialData) => payload.section;
+	const tab = $derived(sectionOf(data));
+	let activeSection = $state(untrack(() => sectionOf(initialData)));
+	let tabLoading = $state(false);
+	const queryClient = useQueryClient();
 	let editingQuestion = $state(false);
 	const actionForm = $derived((form ?? {}) as AdminForm);
 	const questionConflict = $derived((actionForm.conflict ?? null) as QuestionConflict | null);
@@ -41,24 +47,67 @@
 		return () => clearTimeout(timeout);
 	});
 
+	const sections: AdminSection[] = ['overview', 'results', 'codes', 'questions', 'question-new'];
+	const key = (section: AdminSection) => ['admin-section', section] as const;
+
+	function reviveDates(value: unknown): unknown {
+		if (Array.isArray(value)) return value.map(reviveDates);
+		if (!value || typeof value !== 'object') return value;
+		return Object.fromEntries(
+			Object.entries(value).map(([name, item]) => [
+				name,
+				name.endsWith('At') && typeof item === 'string' ? new Date(item) : reviveDates(item)
+			])
+		);
+	}
+
+	async function fetchSection(section: AdminSection) {
+		const response = await fetch(`/api/admin/${section}`);
+		if (!response.ok) throw new Error('관리자 데이터를 불러오지 못했습니다.');
+		return reviveDates(await response.json()) as typeof initialData;
+	}
+
+	async function openSection(event: MouseEvent, section: AdminSection) {
+		event.preventDefault();
+		if (section === tab) return;
+		activeSection = section;
+		const cached = queryClient.getQueryData<typeof initialData>(key(section));
+		if (cached) {
+			data = cached;
+			history.pushState({}, '', `/admin/${section}`);
+			return;
+		}
+		tabLoading = true;
+		try {
+			data = await queryClient.fetchQuery({
+				queryKey: key(section),
+				queryFn: () => fetchSection(section),
+				staleTime: 60_000
+			});
+			history.pushState({}, '', `/admin/${section}`);
+		} catch {
+			activeSection = tab;
+			toast = {
+				tone: 'error',
+				message: '관리자 데이터를 불러오지 못했습니다. 다시 시도해 주세요.'
+			};
+		} finally {
+			tabLoading = false;
+		}
+	}
+
 	onMount(() => {
-		const sections = [
-			'/admin/overview',
-			'/admin/results',
-			'/admin/codes',
-			'/admin/questions',
-			'/admin/question-new'
-		];
+		queryClient.setQueryData(key(tab), data);
 		void Promise.all(
 			sections
-				.filter((section) => section !== `/admin/${tab}`)
-				.map(async (section) => {
-					try {
-						await preloadData(section);
-					} catch {
-						// A normal navigation will retry if a background preload fails.
-					}
-				})
+				.filter((section) => section !== tab)
+				.map((section) =>
+					queryClient.prefetchQuery({
+						queryKey: key(section),
+						queryFn: () => fetchSection(section),
+						staleTime: 60_000
+					})
+				)
 		);
 	});
 </script>
@@ -88,49 +137,52 @@
 		<nav class="flex overflow-x-auto border-b border-[#c8d0d9]" aria-label="관리자 메뉴">
 			<a
 				href="/admin/overview"
-				data-sveltekit-preload-data="hover"
+				onclick={(event) => openSection(event, 'overview')}
 				class="shrink-0 border-b-2 px-5 py-3 text-sm font-semibold transition-colors"
-				class:border-[#087ba8]={tab === 'overview'}
-				class:text-[#087ba8]={tab === 'overview'}
-				class:border-transparent={tab !== 'overview'}
-				aria-current={tab === 'overview' ? 'page' : undefined}>개요</a
+				class:border-[#087ba8]={activeSection === 'overview'}
+				class:text-[#087ba8]={activeSection === 'overview'}
+				class:border-transparent={activeSection !== 'overview'}
+				aria-current={activeSection === 'overview' ? 'page' : undefined}>개요</a
 			>
 			<a
 				href="/admin/results"
-				data-sveltekit-preload-data="hover"
+				onclick={(event) => openSection(event, 'results')}
 				class="shrink-0 border-b-2 px-5 py-3 text-sm font-semibold transition-colors"
-				class:border-[#087ba8]={tab === 'results'}
-				class:text-[#087ba8]={tab === 'results'}
-				class:border-transparent={tab !== 'results'}
-				aria-current={tab === 'results' ? 'page' : undefined}>응시 결과</a
+				class:border-[#087ba8]={activeSection === 'results'}
+				class:text-[#087ba8]={activeSection === 'results'}
+				class:border-transparent={activeSection !== 'results'}
+				aria-current={activeSection === 'results' ? 'page' : undefined}>응시 결과</a
 			>
 			<a
 				href="/admin/codes"
-				data-sveltekit-preload-data="hover"
+				onclick={(event) => openSection(event, 'codes')}
 				class="shrink-0 border-b-2 px-5 py-3 text-sm font-semibold transition-colors"
-				class:border-[#087ba8]={tab === 'codes'}
-				class:text-[#087ba8]={tab === 'codes'}
-				class:border-transparent={tab !== 'codes'}
-				aria-current={tab === 'codes' ? 'page' : undefined}>응시 코드</a
+				class:border-[#087ba8]={activeSection === 'codes'}
+				class:text-[#087ba8]={activeSection === 'codes'}
+				class:border-transparent={activeSection !== 'codes'}
+				aria-current={activeSection === 'codes' ? 'page' : undefined}>응시 코드</a
 			>
 			<a
 				href="/admin/questions"
-				data-sveltekit-preload-data="hover"
+				onclick={(event) => openSection(event, 'questions')}
 				class="shrink-0 border-b-2 px-5 py-3 text-sm font-semibold transition-colors"
-				class:border-[#087ba8]={tab === 'questions'}
-				class:text-[#087ba8]={tab === 'questions'}
-				class:border-transparent={tab !== 'questions'}
-				aria-current={tab === 'questions' ? 'page' : undefined}>문제 관리</a
+				class:border-[#087ba8]={activeSection === 'questions'}
+				class:text-[#087ba8]={activeSection === 'questions'}
+				class:border-transparent={activeSection !== 'questions'}
+				aria-current={activeSection === 'questions' ? 'page' : undefined}>문제 관리</a
 			>
 			<a
 				href="/admin/question-new"
-				data-sveltekit-preload-data="hover"
+				onclick={(event) => openSection(event, 'question-new')}
 				class="shrink-0 border-b-2 px-5 py-3 text-sm font-semibold transition-colors"
-				class:border-[#087ba8]={tab === 'question-new'}
-				class:text-[#087ba8]={tab === 'question-new'}
-				class:border-transparent={tab !== 'question-new'}
-				aria-current={tab === 'question-new' ? 'page' : undefined}>문제 등록</a
+				class:border-[#087ba8]={activeSection === 'question-new'}
+				class:text-[#087ba8]={activeSection === 'question-new'}
+				class:border-transparent={activeSection !== 'question-new'}
+				aria-current={activeSection === 'question-new' ? 'page' : undefined}>문제 등록</a
 			>
+			{#if tabLoading}<span class="ml-auto self-center text-xs font-semibold text-[#6a7684]"
+					>불러오는 중…</span
+				>{/if}
 		</nav>
 
 		{#if tab === 'overview' && data.overview}
