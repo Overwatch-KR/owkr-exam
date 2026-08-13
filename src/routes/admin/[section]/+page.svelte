@@ -1,7 +1,7 @@
 <script lang="ts">
-		import AdminPage from '../+page.svelte';
+	import AdminPage from '../+page.svelte';
 
-		let {data, form} = $props();
+	let { data, form } = $props();
 </script>
 
-<AdminPage {data} {form}/>
+<AdminPage {data} {form} />
