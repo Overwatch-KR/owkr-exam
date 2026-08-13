@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>OWKR EXAM</title>
+  <rect width="64" height="64" rx="14" fill="#087ba8"/>
+  <path d="M19 14h19l8 8v28H19z" fill="#fff"/>
+  <path d="M38 14v9h8" fill="#d9f2fa"/>
+  <path d="M26 31h12M26 37h7" fill="none" stroke="#86b8c9" stroke-width="3" stroke-linecap="round"/>
+  <path d="m27 45 3.2 3.2L37.5 40" fill="none" stroke="#087ba8" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
