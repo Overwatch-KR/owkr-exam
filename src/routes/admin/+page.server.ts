@@ -175,14 +175,26 @@ export const actions = {
 		const editor = admin(event);
 		const data = await event.request.formData();
 		const id = String(data.get('id'));
+		const revision = new Date(String(data.get('revision') || ''));
 		const parsed = questionInput(data);
 		if ('error' in parsed) return fail(400, { message: parsed.error });
+		if (Number.isNaN(revision.getTime())) {
+			return fail(400, {
+				message: '문제의 수정 정보를 확인할 수 없습니다. 목록에서 다시 열어 주세요.'
+			});
+		}
 		const [existing] = await database()
-			.select({ id: questions.id })
+			.select({ id: questions.id, updatedAt: questions.updatedAt })
 			.from(questions)
 			.where(eq(questions.id, id));
 		if (!existing) return fail(404, { message: '수정할 문제를 찾지 못했습니다.' });
-		await database()
+		if (existing.updatedAt.getTime() !== revision.getTime()) {
+			return fail(409, {
+				message:
+					'다른 관리자가 이 문제를 먼저 수정했습니다. 최신 내용을 확인한 뒤 다시 수정해 주세요.'
+			});
+		}
+		const updated = await database()
 			.update(questions)
 			.set({
 				...parsed.value,
@@ -190,7 +202,14 @@ export const actions = {
 				updatedById: editor.id,
 				updatedByName: editor.displayName
 			})
-			.where(eq(questions.id, id));
+			.where(and(eq(questions.id, id), eq(questions.updatedAt, revision)))
+			.returning({ id: questions.id });
+		if (!updated.length) {
+			return fail(409, {
+				message:
+					'다른 관리자가 이 문제를 먼저 수정했습니다. 최신 내용을 확인한 뒤 다시 수정해 주세요.'
+			});
+		}
 		return { success: '문제를 수정했습니다.' };
 	},
 	grade: async (event) => {
@@ -208,8 +227,8 @@ export const actions = {
 		if (!attempt?.submittedAt || !question || question.type === 'multiple') {
 			return fail(400, { message: '채점할 수 있는 답안을 찾지 못했습니다.' });
 		}
-		if (!Number.isInteger(score) || score < 0 || score > question.points) {
-			return fail(400, { message: `점수는 0점부터 ${question.points}점까지 입력해 주세요.` });
+		if (!Number.isInteger(score) || score < 0) {
+			return fail(400, { message: '점수는 0점 이상의 정수로 입력해 주세요.' });
 		}
 
 		await db
@@ -279,6 +298,27 @@ export const actions = {
 			.delete(questions)
 			.where(eq(questions.id, String(data.get('id'))));
 		return { success: '문제를 삭제했습니다.' };
+	},
+	deleteAttempt: async (event) => {
+		admin(event);
+		const data = await event.request.formData();
+		const attemptId = String(data.get('id'));
+		const deleted = await database().transaction(async (tx) => {
+			const removed = await tx
+				.delete(attempts)
+				.where(eq(attempts.id, attemptId))
+				.returning({ codeId: attempts.codeId });
+			if (!removed.length) return null;
+			await tx
+				.update(examCodes)
+				.set({ status: 'expired' })
+				.where(eq(examCodes.id, removed[0].codeId));
+			return removed[0];
+		});
+		if (!deleted) return fail(404, { message: '삭제할 응시 결과를 찾지 못했습니다.' });
+		return {
+			success: '응시 결과와 답안 데이터를 삭제했습니다. 연결된 코드는 재사용할 수 없습니다.'
+		};
 	},
 	expireCode: async (event) => {
 		admin(event);

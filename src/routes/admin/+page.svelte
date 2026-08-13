@@ -523,30 +523,48 @@
 										{q.answer || '(미응답)'}
 									</div>
 									{#if q.type === 'short'}
-										<form method="POST" action="?/grade" class="mt-4 flex flex-wrap gap-2">
-											<input type="hidden" name="attemptId" value={data.grading.attempt.id} /><input
-												type="hidden"
-												name="questionId"
-												value={q.id}
-											/>
-											<button
-												name="score"
-												value={q.points}
-												class="btn-secondary"
-												class:border-green-700={q.score === q.points}
-												class:text-green-800={q.score === q.points}
-												>정답 · {q.points}점
-											</button>
-											<button
-												name="score"
-												value="0"
-												class="btn-secondary"
-												class:border-red-700={q.score === 0}
-												class:text-red-800={q.score === 0}
-											>
-												오답 · 0점
-											</button>
-										</form>
+										<div
+											class="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
+										>
+											<form method="POST" action="?/grade" class="flex flex-wrap gap-2">
+												<input
+													type="hidden"
+													name="attemptId"
+													value={data.grading.attempt.id}
+												/><input type="hidden" name="questionId" value={q.id} />
+												<button
+													name="score"
+													value={q.points}
+													class="btn-secondary"
+													class:border-green-700={q.score === q.points}
+													class:text-green-800={q.score === q.points}
+													>정답 · {q.points}점
+												</button>
+												<button
+													name="score"
+													value="0"
+													class="btn-secondary"
+													class:border-red-700={q.score === 0}
+													class:text-red-800={q.score === 0}
+												>
+													오답 · 0점
+												</button>
+											</form>
+											<form method="POST" action="?/grade" class="flex items-center gap-2">
+												<input type="hidden" name="attemptId" value={data.grading.attempt.id} />
+												<input type="hidden" name="questionId" value={q.id} />
+												<label class="text-xs font-semibold" for={`score-${q.id}`}>직접 입력</label>
+												<input
+													id={`score-${q.id}`}
+													name="score"
+													type="number"
+													value={q.score ?? ''}
+													required
+													class="w-20"
+												/>
+												<button class="btn-secondary">저장</button>
+											</form>
+										</div>
 									{:else}
 										<div
 											class="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
@@ -576,8 +594,6 @@
 													id={`score-${q.id}`}
 													name="score"
 													type="number"
-													min="0"
-													max={q.points}
 													value={q.score ?? ''}
 													required
 													class="w-20"
@@ -642,6 +658,23 @@
 												class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
 												>답안 채점</a
 											>{/if}
+										<form
+											method="POST"
+											action="?/deleteAttempt"
+											onsubmit={(event) => {
+												if (
+													!confirm(
+														`${a.displayName}님의 응시 결과와 답안을 영구 삭제할까요? 연결된 코드는 재사용할 수 없습니다.`
+													)
+												)
+													event.preventDefault();
+											}}
+										>
+											<input type="hidden" name="id" value={a.id} />
+											<button class="text-xs font-bold text-red-700 underline underline-offset-4"
+												>삭제</button
+											>
+										</form>
 									</td>
 								</tr>
 							{/each}

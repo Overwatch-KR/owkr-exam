@@ -9,6 +9,7 @@
 		options: string[] | null;
 		correctAnswer: number | null;
 		points: number;
+		updatedAt?: Date;
 	};
 
 	let {
@@ -52,6 +53,9 @@
 
 <form method="POST" {action} class="border-ink border-t-2 bg-white px-5 pt-5 pb-6 sm:px-6">
 	{#if question?.id}<input type="hidden" name="id" value={question.id} />{/if}
+	{#if question?.updatedAt}
+		<input type="hidden" name="revision" value={question.updatedAt.toISOString()} />
+	{/if}
 
 	<fieldset>
 		<legend class="label">문제 유형</legend>
@@ -91,7 +95,6 @@
 					id={`points-${question?.id || 'new'}`}
 					name="points"
 					type="number"
-					min="1"
 					bind:value={points}
 					required
 					class="w-full pr-9"
