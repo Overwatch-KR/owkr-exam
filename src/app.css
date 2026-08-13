@@ -79,6 +79,10 @@
 		@apply border-y border-[#c8d0d9] bg-[#f0f3f6] text-left text-[11px] font-semibold tracking-wide text-[#6a7684];
 	}
 
+	.notice-error {
+		@apply border-l-2 border-red-700 bg-red-50 px-3 py-2 text-sm leading-6 font-semibold text-red-800;
+	}
+
 	.site-header {
 		@apply border-line border-b bg-white;
 	}

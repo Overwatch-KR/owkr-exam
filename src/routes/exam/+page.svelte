@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import AppToast from '$lib/components/app-toast.svelte';
 	import {
 		examErrorMessage,
 		saveAnswer,
@@ -22,6 +23,7 @@
 	let index = $state(0);
 	let values = $state<Record<string, string>>({});
 	let saveError = $state('');
+	let toast = $state<{ tone: 'success' | 'error'; message: string } | null>(null);
 	let remaining = $state(0);
 	let confirm = $state(false);
 	let q = $derived(attempt?.questions[index]);
@@ -125,7 +127,10 @@
 			};
 			confirm = false;
 		} catch (error) {
-			message = examErrorMessage(error, '시험을 제출하지 못했습니다.');
+			toast = {
+				tone: 'error',
+				message: examErrorMessage(error, '시험을 제출하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+			};
 		}
 	}
 </script>
@@ -176,11 +181,7 @@
 					{#if starting}<p class="mt-3 text-center text-xs text-[#6a7684]">
 							시험 문제를 준비하고 있습니다.
 						</p>{/if}
-					{#if message}<p
-							id="code-error"
-							role="alert"
-							class="mt-3 text-sm font-semibold text-red-700"
-						>
+					{#if message}<p id="code-error" role="alert" class="notice-error mt-3">
 							{message}
 						</p>{/if}
 				</form>
@@ -230,7 +231,7 @@
 					<p class="text-sm font-semibold">OWKR 관리자 선발시험</p>
 					<p class="mt-1 text-xs text-[#6a7684]">문제 {index + 1} / {attempt.questions.length}</p>
 				</div>
-				{#if saveError}<p role="alert" class="text-xs font-semibold text-red-700">
+				{#if saveError}<p role="alert" class="notice-error max-w-sm text-xs">
 						{saveError}
 					</p>{/if}
 			</div>
@@ -345,3 +346,5 @@
 		</div>
 	{/if}
 {/if}
+
+<AppToast {toast} dismiss={() => (toast = null)} />

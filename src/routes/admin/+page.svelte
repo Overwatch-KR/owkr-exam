@@ -2,7 +2,7 @@
 	import { useQueryClient } from '@tanstack/svelte-query';
 	import { onMount, untrack } from 'svelte';
 	import { codeStatusLabel, questionTypeLabel } from '$lib/admin/presentation';
-	import AdminToast from '$lib/components/admin-toast.svelte';
+	import AppToast from '$lib/components/app-toast.svelte';
 	import QuestionEditor from '$lib/components/question-editor.svelte';
 
 	type ConflictQuestion = {
@@ -843,4 +843,4 @@
 	</div>
 </main>
 
-<AdminToast {toast} dismiss={() => (toast = null)} />
+<AppToast {toast} dismiss={() => (toast = null)} />
