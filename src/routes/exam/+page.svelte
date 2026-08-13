@@ -39,7 +39,8 @@
 		const onKeydown = (event: KeyboardEvent) => {
 			if (event.key === 'Escape' && confirm) confirm = false;
 			if (!attempt || attempt.submittedAt || confirm) return;
-			if (event.key === 'Enter' && event.shiftKey) {
+			const isEnter = event.key === 'Enter' || event.code === 'NumpadEnter';
+			if (isEnter && event.shiftKey) {
 				event.preventDefault();
 				goNext();
 				return;
@@ -48,14 +49,14 @@
 			const isTyping = Boolean(
 				target?.closest('textarea, select, [contenteditable="true"], input:not([type="radio"])')
 			);
-			if (
-				!isTyping &&
-				!event.ctrlKey &&
-				!event.metaKey &&
-				!event.altKey &&
-				/^[1-5]$/.test(event.key)
-			) {
-				selectChoice(Number(event.key) - 1);
+			const choiceIndex = /^Numpad[1-5]$/.test(event.code)
+				? Number(event.code.slice(-1)) - 1
+				: /^[1-5]$/.test(event.key)
+					? Number(event.key) - 1
+					: null;
+			if (!isTyping && !event.ctrlKey && !event.metaKey && !event.altKey && choiceIndex !== null) {
+				event.preventDefault();
+				selectChoice(choiceIndex);
 			}
 		};
 		addEventListener('pageshow', onShow);
