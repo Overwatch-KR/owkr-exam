@@ -1,4 +1,4 @@
-import { asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { asc, desc, eq, inArray } from 'drizzle-orm';
 import { answers, attempts, examCodes, examQuestions, questions } from '$lib/server/schema';
 import { database } from '$lib/server/db';
 
@@ -31,14 +31,7 @@ export async function loadAdminSection(section: AdminSection, url: URL) {
 	if (section === 'question-new') return { section };
 
 	if (section === 'questions') {
-		const allQuestions = await db
-			.select()
-			.from(questions)
-			// The essay question numbered 35 is the fixed final question.
-			.orderBy(
-				sql`case when ${questions.type} = 'essay' and ${questions.sortOrder} = 35 then 1 else 0 end`,
-				asc(questions.sortOrder)
-			);
+		const allQuestions = await db.select().from(questions).orderBy(asc(questions.sortOrder));
 		const selectedQuestionId = url.searchParams.get('question');
 		return {
 			section,
@@ -65,10 +58,7 @@ export async function loadAdminSection(section: AdminSection, url: URL) {
 			.select()
 			.from(examQuestions)
 			.where(eq(examQuestions.attemptId, gradingAttempt.id))
-			.orderBy(
-				sql`case when ${examQuestions.type} = 'essay' and ${examQuestions.sortOrder} = 35 then 1 else 0 end`,
-				asc(examQuestions.sortOrder)
-			);
+			.orderBy(asc(examQuestions.sortOrder));
 		const submittedAnswers = snapshot.length
 			? await db
 					.select()

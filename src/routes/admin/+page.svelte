@@ -332,6 +332,25 @@
 													>{editingQuestion ? '수정 취소' : '문제 수정'}</button
 												>
 											{/if}
+											<form
+												method="POST"
+												action="?/deleteQuestion"
+												onsubmit={(event) => {
+													if (
+														!confirm(
+															'이 문제를 삭제할까요? 이미 시작한 응시자의 문제 사본은 유지됩니다.'
+														)
+													) {
+														event.preventDefault();
+													}
+												}}
+											>
+												<input type="hidden" name="id" value={data.selectedQuestion.id} />
+												<button
+													class="text-xs font-semibold text-red-700 underline underline-offset-4"
+													>문제 삭제</button
+												>
+											</form>
 											<a
 												href="/admin/questions"
 												onclick={closeQuestion}

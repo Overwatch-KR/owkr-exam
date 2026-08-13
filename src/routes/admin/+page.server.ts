@@ -209,11 +209,26 @@ export const actions = {
 	deleteQuestion: async (event) => {
 		admin(event);
 		const data = await event.request.formData();
-		await database()
-			.delete(questions)
-			.where(eq(questions.id, String(data.get('id'))));
+		const questionId = String(data.get('id'));
+		const deleted = await database().transaction(async (tx) => {
+			const removed = await tx
+				.delete(questions)
+				.where(eq(questions.id, questionId))
+				.returning({ id: questions.id });
+			if (!removed.length) return false;
+
+			const remaining = await tx.select().from(questions).orderBy(questions.sortOrder);
+			for (const [index, question] of remaining.entries()) {
+				const sortOrder = index + 1;
+				if (question.sortOrder !== sortOrder) {
+					await tx.update(questions).set({ sortOrder }).where(eq(questions.id, question.id));
+				}
+			}
+			return true;
+		});
+		if (!deleted) return fail(404, { message: '삭제할 문제를 찾지 못했습니다.' });
 		invalidateExamConfig();
-		return { success: '문제를 삭제했습니다.' };
+		return { success: '문제를 삭제하고 남은 문제 번호를 정리했습니다.' };
 	},
 	deleteAttempt: async (event) => {
 		admin(event);
