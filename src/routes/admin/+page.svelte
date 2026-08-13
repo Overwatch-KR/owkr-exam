@@ -494,8 +494,8 @@
 													>문제를 삭제할까요?</AlertDialog.Title
 												>
 												<AlertDialog.Description class="mt-2 text-sm leading-6 text-[#6a7684]">
-													문제 {data.selectedQuestion.sortOrder}은 문제은행에서 삭제됩니다. 이미
-													시작한 응시자의 문제 사본과 채점 결과는 유지됩니다.
+													{data.selectedQuestion.sortOrder}은(는) 시험에서 삭제됩니다.<br>
+													이미 시작한 응시자의 문제 사본과 채점 결과는 유지됩니다.
 												</AlertDialog.Description>
 											</AlertDialog.Header>
 											<form id="delete-question-form" method="POST" action="?/deleteQuestion">
