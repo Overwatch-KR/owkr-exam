@@ -1,2 +1,26 @@
-import { json } from '@sveltejs/kit'; import { z } from 'zod'; import { and,eq } from 'drizzle-orm'; import { database } from '$lib/server/db'; import { answers,examQuestions } from '$lib/server/schema'; import { user } from '$lib/server/guard'; import { ensureOpen } from '$lib/server/exam';
-export const POST=async(e)=>{const u=user(e),p=z.object({attemptQuestionId:z.string().uuid(),value:z.string().max(10000)}).safeParse(await e.request.json());if(!p.success)return json({message:'입력이 올바르지 않습니다.'},{status:400});const db=database();const [q]=await db.select().from(examQuestions).where(eq(examQuestions.id,p.data.attemptQuestionId));if(!q)return json({message:'문제를 찾을 수 없습니다.'},{status:404});const a=await ensureOpen(q.attemptId,u.id);if(a.submittedAt)return json({message:a.timedOut?'시험 시간이 초과되었습니다.':'이미 제출된 시험입니다.'},{status:409});await db.insert(answers).values({attemptQuestionId:q.id,value:p.data.value,updatedAt:new Date()}).onConflictDoUpdate({target:answers.attemptQuestionId,set:{value:p.data.value,updatedAt:new Date()}});return json({ok:true})};
+import {json} from '@sveltejs/kit';
+import {z} from 'zod';
+import {and, eq} from 'drizzle-orm';
+import {database} from '$lib/server/db';
+import {answers, examQuestions} from '$lib/server/schema';
+import {user} from '$lib/server/guard';
+import {ensureOpen} from '$lib/server/exam';
+
+export const POST = async (e) => {
+		const u = user(e), p = z.object({
+				attemptQuestionId: z.string().uuid(),
+				value: z.string().max(10000)
+		}).safeParse(await e.request.json());
+		if (!p.success) return json({message: '입력이 올바르지 않습니다.'}, {status: 400});
+		const db = database();
+		const [q] = await db.select().from(examQuestions).where(eq(examQuestions.id, p.data.attemptQuestionId));
+		if (!q) return json({message: '문제를 찾을 수 없습니다.'}, {status: 404});
+		const a = await ensureOpen(q.attemptId, u.id);
+		if (a.submittedAt) return json({message: a.timedOut ? '시험 시간이 초과되었습니다.' : '이미 제출된 시험입니다.'}, {status: 409});
+		await db.insert(answers).values({
+				attemptQuestionId: q.id,
+				value: p.data.value,
+				updatedAt: new Date()
+		}).onConflictDoUpdate({target: answers.attemptQuestionId, set: {value: p.data.value, updatedAt: new Date()}});
+		return json({ok: true})
+};
