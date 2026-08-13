@@ -56,7 +56,7 @@ export const load = async (event) => {
 		const attempt = target === 'results' ? event.url.searchParams.get('attempt') : null;
 		redirect(307, `/admin/${target}${attempt ? `?attempt=${encodeURIComponent(attempt)}` : ''}`);
 	}
-	if (!['overview', 'questions', 'codes', 'results'].includes(section)) {
+	if (!['overview', 'questions', 'question-new', 'codes', 'results'].includes(section)) {
 		error(404, '관리자 메뉴를 찾을 수 없습니다.');
 	}
 	const db = database();
@@ -79,6 +79,8 @@ export const load = async (event) => {
 			}
 		};
 	}
+
+	if (section === 'question-new') return { section };
 
 	if (section === 'questions') {
 		const allQuestions = await db.select().from(questions).orderBy(asc(questions.sortOrder));

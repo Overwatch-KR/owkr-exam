@@ -86,6 +86,15 @@
 				class:border-transparent={tab !== 'questions'}
 				aria-current={tab === 'questions' ? 'page' : undefined}>문제 관리</a
 			>
+			<a
+				href="/admin/question-new"
+				data-sveltekit-preload-data="hover"
+				class="shrink-0 border-b-2 px-5 py-3 text-sm font-semibold transition-colors"
+				class:border-[#087ba8]={tab === 'question-new'}
+				class:text-[#087ba8]={tab === 'question-new'}
+				class:border-transparent={tab !== 'question-new'}
+				aria-current={tab === 'question-new' ? 'page' : undefined}>문제 등록</a
+			>
 		</nav>
 
 		{#if form?.message}
@@ -204,19 +213,19 @@
 					</section>
 				</div>
 			</section>
-		{:else if tab === 'questions'}
-			<section class="space-y-8 py-8">
-				<div>
-					<div class="mb-3">
-						<h2 class="text-lg font-bold">새 문제 등록</h2>
-						<p class="mt-1 text-xs leading-5 text-stone-500">
-							문제 유형을 먼저 고르면 필요한 항목만 표시됩니다. 이미 시험을 시작한 응시자의 문제
-							사본은 바뀌지 않습니다.
-						</p>
-					</div>
-					<QuestionEditor action="?/question" />
+		{:else if tab === 'question-new'}
+			<section class="max-w-4xl py-8">
+				<div class="mb-5">
+					<h2 class="text-lg font-bold">새 문제 등록</h2>
+					<p class="mt-1 text-xs leading-5 text-stone-500">
+						문제 유형을 먼저 고르면 필요한 항목만 표시됩니다. 이미 시험을 시작한 응시자의 문제
+						사본은 바뀌지 않습니다.
+					</p>
 				</div>
-
+				<QuestionEditor action="?/question" />
+			</section>
+		{:else if tab === 'questions'}
+			<section class="py-8">
 				<div class="min-w-0">
 					{#if data.selectedQuestion}
 						<article
