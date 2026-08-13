@@ -1,5 +1,5 @@
 import { error, fail, redirect } from '@sveltejs/kit';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { admin } from '$lib/server/guard';
 import { database } from '$lib/server/db';
 import { answers, attempts, examCodes, examQuestions, questions } from '$lib/server/schema';
@@ -115,7 +115,12 @@ export const actions = {
 				updatedById: editor.id,
 				updatedByName: editor.displayName
 			})
-			.where(and(eq(questions.id, id), eq(questions.updatedAt, revision)))
+			.where(
+				and(
+					eq(questions.id, id),
+					sql`date_trunc('milliseconds', ${questions.updatedAt}) = ${revision}`
+				)
+			)
 			.returning({ id: questions.id });
 		if (!updated.length) {
 			const [latest] = await db.select().from(questions).where(eq(questions.id, id));
