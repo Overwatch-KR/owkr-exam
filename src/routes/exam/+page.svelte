@@ -18,6 +18,7 @@
 	let { data } = $props();
 	let code = $state('');
 	let message = $state('');
+	let readyToStart = $state(false);
 	let starting = $state(false);
 	let attempt = $state<ExamSession | null>(null);
 	let index = $state(0);
@@ -74,6 +75,17 @@
 		`${Math.floor(ms / 60000)}`.padStart(2, '0') +
 		':' +
 		`${Math.floor(ms / 1000) % 60}`.padStart(2, '0');
+
+	function continueToInstructions() {
+		message = '';
+		const normalizedCode = code.trim().toUpperCase();
+		if (!/^[A-Z0-9]{6}$/.test(normalizedCode)) {
+			message = '영문과 숫자로 된 6자리 응시 코드를 입력해 주세요.';
+			return;
+		}
+		code = normalizedCode;
+		readyToStart = true;
+	}
 
 	async function start() {
 		message = '';
@@ -133,7 +145,7 @@
 	}
 </script>
 
-{#if !attempt}
+{#if !attempt && !readyToStart}
 	<main class="min-h-screen bg-[#f7f8fa]">
 		<header class="site-header">
 			<div class="mx-auto flex h-16 max-w-xl items-center justify-between px-5">
@@ -156,7 +168,7 @@
 					aria-busy={starting}
 					onsubmit={(event) => {
 						event.preventDefault();
-						start();
+						continueToInstructions();
 					}}
 				>
 					<label class="label" for="code">응시 코드</label><input
@@ -173,9 +185,7 @@
 						placeholder="A7K3PX"
 					/>
 					<p id="code-help" class="mt-2 text-xs text-[#6a7684]">영문과 숫자 6자리</p>
-					<button class="btn mt-4 w-full" disabled={starting}>
-						{starting ? '시험 준비 중…' : '시험 시작'}
-					</button>
+					<button class="btn mt-4 w-full" disabled={starting}> 안내 확인 </button>
 					{#if starting}<p class="mt-3 text-center text-xs text-[#6a7684]">
 							시험 문제를 준비하고 있습니다.
 						</p>{/if}
@@ -184,6 +194,63 @@
 						</p>{/if}
 				</form>
 			</div>
+		</section>
+	</main>
+{:else if !attempt}
+	<main class="min-h-screen bg-[#f7f8fa]">
+		<header class="site-header">
+			<div class="mx-auto flex h-16 max-w-2xl items-center justify-between px-5">
+				<a href="/" class="wordmark">OWKR EXAM</a>
+				<button
+					type="button"
+					class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
+					onclick={() => {
+						readyToStart = false;
+						message = '';
+					}}>코드 다시 입력</button
+				>
+			</div>
+		</header>
+		<section class="mx-auto max-w-2xl px-5 py-12 sm:py-16">
+			<p class="eyebrow">EXAM GUIDE</p>
+			<h1 class="mt-3 text-[28px] font-bold tracking-[-.04em]">시험 안내</h1>
+			<p class="mt-3 text-sm leading-6 text-[#6a7684]">
+				안내를 확인한 뒤 시험을 시작해 주세요. <b class="font-semibold text-[#34404d]"
+					>시험 시작을 누르는 순간부터 60분이 적용됩니다.</b
+				>
+			</p>
+
+			<div class="mt-8 space-y-4 border-y border-[#c8d0d9] py-6 text-sm leading-7 text-[#34404d]">
+				<p>
+					※ 객관식 (19) 문항, 단답형 (9) 문항, 서술형 (6) 문항, 논술형 (1) 문항, 총 ({data.activeQuestionCount})
+					문항으로 구성되어 있습니다.
+				</p>
+				<p>※ 객관식 44점, 단답형 16점, 서술형 20점, 논술형 20점, 총 100점 만점입니다.</p>
+				<p>
+					※ 응시 시간은 60분이며, 답안 제출 전 문제의 정답을 제대로 체크 또는 작성하였는지 다시 한
+					번 검토하시길 바랍니다.
+				</p>
+				<p>
+					※ 본 시험지의 저작권은 오버워치 코리아 서버에 있습니다. 유출 또는 누설하는 행위 일체를
+					금합니다.
+				</p>
+			</div>
+
+			{#if message}<p role="alert" class="notice-error mt-5">{message}</p>{/if}
+			<div class="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+				<button
+					type="button"
+					class="btn-secondary"
+					disabled={starting}
+					onclick={() => (readyToStart = false)}>이전</button
+				>
+				<button type="button" class="btn" disabled={starting} onclick={start}>
+					{starting ? '시험 준비 중…' : '시험 시작'}
+				</button>
+			</div>
+			{#if starting}<p class="mt-3 text-right text-xs text-[#6a7684]">
+					시험 문제를 준비하고 있습니다.
+				</p>{/if}
 		</section>
 	</main>
 {:else if attempt.submittedAt}
