@@ -4,6 +4,7 @@
 	import { toast } from 'svelte-sonner';
 	import { codeStatusLabel, questionTypeLabel } from '$lib/admin/presentation';
 	import QuestionEditor from '$lib/components/question-editor.svelte';
+	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 
 	type ConflictQuestion = {
 		id: string;
@@ -31,6 +32,7 @@
 	const tab = $derived(sectionOf(data));
 	const activeSection = $derived(tab);
 	let editingQuestion = $state(false);
+	let deleteQuestionOpen = $state(false);
 	const actionForm = $derived((form ?? {}) as AdminForm);
 	const questionConflict = $derived((actionForm.conflict ?? null) as QuestionConflict | null);
 	const hasQuestionConflict = $derived(Boolean(questionConflict));
@@ -65,6 +67,7 @@
 		if (tab !== 'questions' || !data.questions) return;
 		editingQuestion = false;
 		data = { ...data, selectedQuestion: question } as typeof initialData;
+		deleteQuestionOpen = false;
 		pushState(`/admin/questions?question=${question.id}#question-detail`, {});
 		void refreshQuestionList(question.id);
 	}
@@ -73,6 +76,7 @@
 		event.preventDefault();
 		if (tab !== 'questions') return;
 		editingQuestion = false;
+		deleteQuestionOpen = false;
 		data = { ...data, selectedQuestion: null } as typeof initialData;
 		pushState('/admin/questions', {});
 	}
@@ -316,47 +320,37 @@
 													class="text-xs font-semibold text-stone-500">비활성</span
 												>{/if}
 										</div>
-										<div class="flex items-center gap-3">
-											{#if questionConflict}
+										<div class="flex flex-wrap items-center gap-3">
+											<div class="flex items-center gap-3">
+												{#if questionConflict}
+													<a
+														href={`/admin/questions?question=${data.selectedQuestion.id}#question-detail`}
+														onclick={closeQuestion}
+														class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
+														>최신본으로 돌아가기</a
+													>
+												{:else}
+													<button
+														type="button"
+														class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
+														onclick={() => (editingQuestion = !editingQuestion)}
+														>{editingQuestion ? '수정 취소' : '문제 수정'}</button
+													>
+												{/if}
 												<a
-													href={`/admin/questions?question=${data.selectedQuestion.id}#question-detail`}
+													href="/admin/questions"
 													onclick={closeQuestion}
 													class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
-													>최신본으로 돌아가기</a
+													>상세 닫기</a
 												>
-											{:else}
-												<button
-													type="button"
-													class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
-													onclick={() => (editingQuestion = !editingQuestion)}
-													>{editingQuestion ? '수정 취소' : '문제 수정'}</button
-												>
-											{/if}
-											<form
-												method="POST"
-												action="?/deleteQuestion"
-												onsubmit={(event) => {
-													if (
-														!confirm(
-															'이 문제를 삭제할까요? 이미 시작한 응시자의 문제 사본은 유지됩니다.'
-														)
-													) {
-														event.preventDefault();
-													}
-												}}
+											</div>
+											<button
+												type="button"
+												onclick={() => (deleteQuestionOpen = true)}
+												class="border-l border-[#dfe4e9] pl-3 text-xs font-semibold text-red-700 underline underline-offset-4"
 											>
-												<input type="hidden" name="id" value={data.selectedQuestion.id} />
-												<button
-													class="text-xs font-semibold text-red-700 underline underline-offset-4"
-													>문제 삭제</button
-												>
-											</form>
-											<a
-												href="/admin/questions"
-												onclick={closeQuestion}
-												class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
-												>상세 닫기</a
-											>
+												문제 삭제
+											</button>
 										</div>
 									</div>
 									<p class="text-muted mt-3 text-xs">
@@ -492,6 +486,34 @@
 											</p>
 										{/if}
 									{/if}
+									<AlertDialog.Root bind:open={deleteQuestionOpen}>
+										<AlertDialog.Content
+											class="max-w-md rounded-lg bg-white p-6 shadow-[0_24px_64px_rgba(17,24,32,0.28)]"
+										>
+											<AlertDialog.Header class="place-items-start text-left">
+												<AlertDialog.Title class="text-lg font-bold"
+													>문제를 삭제할까요?</AlertDialog.Title
+												>
+												<AlertDialog.Description class="mt-2 text-sm leading-6 text-[#6a7684]">
+													문제 {data.selectedQuestion.sortOrder}은 문제은행에서 삭제됩니다. 이미
+													시작한 응시자의 문제 사본과 채점 결과는 유지됩니다.
+												</AlertDialog.Description>
+											</AlertDialog.Header>
+											<form id="delete-question-form" method="POST" action="?/deleteQuestion">
+												<input type="hidden" name="id" value={data.selectedQuestion.id} />
+											</form>
+											<div class="mt-7 flex justify-end gap-2">
+												<AlertDialog.Cancel class="btn-secondary">취소</AlertDialog.Cancel>
+												<button
+													type="submit"
+													form="delete-question-form"
+													class="btn bg-red-700 hover:bg-red-800"
+												>
+													삭제하기
+												</button>
+											</div>
+										</AlertDialog.Content>
+									</AlertDialog.Root>
 								</article>
 							{:else}
 								<aside
@@ -560,14 +582,6 @@
 																class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
 																>상세</a
 															>
-															<form method="POST" action="?/deleteQuestion">
-																<input type="hidden" name="id" value={q.id} />
-																<button
-																	class="text-xs font-bold text-red-700 underline underline-offset-4"
-																>
-																	삭제
-																</button>
-															</form>
 														</div>
 													</td>
 												</tr>

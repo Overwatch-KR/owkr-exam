@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
+	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import {
 		examErrorMessage,
 		saveAnswer,
@@ -26,15 +27,10 @@
 	let saveError = $state('');
 	let remaining = $state(0);
 	let confirm = $state(false);
-	let confirmDialog = $state<HTMLDivElement>();
 	let q = $derived(attempt?.questions[index]);
 	let answeredCount = $derived(
 		attempt?.questions.filter((item) => values[item.id]?.trim()).length ?? 0
 	);
-
-	$effect(() => {
-		if (confirm) confirmDialog?.focus();
-	});
 	onMount(() => {
 		const timer = setInterval(() => {
 			if (attempt) {
@@ -402,34 +398,24 @@
 			</div>
 		</div>
 	</main>
-	{#if confirm}
-		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-5">
-			<div
-				bind:this={confirmDialog}
-				role="dialog"
-				aria-modal="true"
-				tabindex="-1"
-				class="w-full max-w-md overflow-hidden rounded-lg bg-white shadow-[0_24px_64px_rgba(17,24,32,0.28)]"
-				aria-labelledby="submit-dialog-title"
-				aria-describedby="submit-dialog-description"
-			>
-				<div class="border-b border-[#dfe4e9] px-6 py-4">
-					<p class="text-sm font-semibold">답안 제출 확인</p>
-				</div>
-				<div class="p-6">
-					<h2 id="submit-dialog-title" class="text-xl font-bold">시험을 제출할까요?</h2>
-					<p id="submit-dialog-description" class="mt-4 text-sm leading-6 text-[#6a7684]">
-						제출 후에는 답안을 수정하거나 다시 응시할 수 없습니다.<br />미응답 문항:
-						<b>{attempt.questions.filter((item) => !values[item.id]?.trim()).length}개</b>
-					</p>
-					<div class="mt-7 flex justify-end gap-2">
-						<button type="button" class="btn-secondary" onclick={() => (confirm = false)}
-							>계속 작성</button
-						>
-						<button type="button" class="btn" onclick={() => submit()}>제출하기</button>
-					</div>
+	<AlertDialog.Root bind:open={confirm}>
+		<AlertDialog.Content
+			class="max-w-md overflow-hidden rounded-lg bg-white p-0 shadow-[0_24px_64px_rgba(17,24,32,0.28)]"
+		>
+			<div class="border-b border-[#dfe4e9] px-6 py-4">
+				<p class="text-sm font-semibold">답안 제출 확인</p>
+			</div>
+			<div class="p-6">
+				<AlertDialog.Title class="text-xl font-bold">시험을 제출할까요?</AlertDialog.Title>
+				<AlertDialog.Description class="mt-4 text-sm leading-6 text-[#6a7684]">
+					제출 후에는 답안을 수정하거나 다시 응시할 수 없습니다.<br />미응답 문항:
+					<b>{attempt.questions.filter((item) => !values[item.id]?.trim()).length}개</b>
+				</AlertDialog.Description>
+				<div class="mt-7 flex justify-end gap-2">
+					<AlertDialog.Cancel class="btn-secondary">계속 작성</AlertDialog.Cancel>
+					<button type="button" class="btn" onclick={() => submit()}>제출하기</button>
 				</div>
 			</div>
-		</div>
-	{/if}
+		</AlertDialog.Content>
+	</AlertDialog.Root>
 {/if}
