@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { preloadData } from '$app/navigation';
 	import { onMount } from 'svelte';
+	import { codeStatusLabel, questionTypeLabel } from '$lib/admin/presentation';
+	import AdminToast from '$lib/components/admin-toast.svelte';
 	import QuestionEditor from '$lib/components/question-editor.svelte';
 
 	type ConflictQuestion = {
@@ -30,16 +32,6 @@
 	const hasQuestionConflict = $derived(Boolean(questionConflict));
 	let toast = $state<{ tone: 'success' | 'error'; message: string } | null>(null);
 	const partialScore = (points: number) => Math.max(1, Math.round(points / 2));
-	const questionType = (type: string) =>
-		type === 'multiple' ? '객관식' : type === 'short' ? '단답형' : '서술·논술형';
-	const codeStatus = (status: string, reusable = false) => {
-		if (reusable) return '테스트 · 반복 사용';
-		return (
-			{ unused: '미사용', in_progress: '응시 중', completed: '응시 완료', expired: '만료됨' }[
-				status
-			] ?? status
-		);
-	};
 
 	$effect(() => {
 		const message = actionForm.success ?? actionForm.message;
@@ -233,7 +225,8 @@
 									>{#each data.overview.recentCodes as item}<tr class="border-line border-b"
 											><td class="p-3 font-mono font-bold tracking-widest">{item.code}</td><td
 												class="p-3"
-												><span class="badge">{codeStatus(item.status, item.reusable)}</span></td
+												><span class="badge">{codeStatusLabel(item.status, item.reusable)}</span
+												></td
 											><td class="p-3 text-xs text-[#6a7684]"
 												>{item.createdAt.toLocaleString('ko-KR')}</td
 											></tr
@@ -272,7 +265,7 @@
 									<span class="font-mono text-xs font-bold text-[#087ba8]"
 										>문제 {data.selectedQuestion.sortOrder}</span
 									>
-									<span class="badge">{questionType(data.selectedQuestion.type)}</span>
+									<span class="badge">{questionTypeLabel(data.selectedQuestion.type)}</span>
 									{#if !data.selectedQuestion.active}<span
 											class="text-xs font-semibold text-stone-500">비활성</span
 										>{/if}
@@ -319,8 +312,8 @@
 														최신 저장본
 													</p>
 													<p class="mt-2 text-xs text-[#6a7684]">
-														{questionType(questionConflict.latest.type)} · {questionConflict.latest
-															.points}점
+														{questionTypeLabel(questionConflict.latest.type)} · {questionConflict
+															.latest.points}점
 													</p>
 													<p class="mt-2 text-sm leading-6 whitespace-pre-wrap">
 														{questionConflict.latest.content}
@@ -331,8 +324,8 @@
 														내가 작성한 내용
 													</p>
 													<p class="mt-2 text-xs text-[#6a7684]">
-														{questionType(questionConflict.draft.type)} · {questionConflict.draft
-															.points}점
+														{questionTypeLabel(questionConflict.draft.type)} · {questionConflict
+															.draft.points}점
 													</p>
 													<p class="mt-2 text-sm leading-6 whitespace-pre-wrap">
 														{questionConflict.draft.content}
@@ -357,7 +350,9 @@
 								>
 									<div class="bg-[#f7f8fa] p-3">
 										<p class="text-muted text-[10px] font-semibold">유형</p>
-										<p class="mt-1 font-semibold">{questionType(data.selectedQuestion.type)}</p>
+										<p class="mt-1 font-semibold">
+											{questionTypeLabel(data.selectedQuestion.type)}
+										</p>
 									</div>
 									<div class="bg-[#f7f8fa] p-3">
 										<p class="text-muted text-[10px] font-semibold">배점</p>
@@ -465,7 +460,7 @@
 													>비활성</span
 												>{/if}
 										</td>
-										<td class="p-3">{questionType(q.type)}</td>
+										<td class="p-3">{questionTypeLabel(q.type)}</td>
 										<td class="p-3">{q.points}</td>
 										<td class="p-3"
 											><span
@@ -540,7 +535,7 @@
 										<td class="p-3 font-mono font-bold tracking-widest">{c.code}</td>
 										<td class="p-3 font-mono text-xs">{c.discordId}</td>
 										<td class="p-3">
-											<span class="badge">{codeStatus(c.status, c.reusable)}</span>
+											<span class="badge">{codeStatusLabel(c.status, c.reusable)}</span>
 										</td>
 										<td class="p-3 text-xs">{c.createdAt.toLocaleString('ko-KR')}</td>
 										<td class="p-3">
@@ -794,29 +789,4 @@
 	</div>
 </main>
 
-{#if toast}
-	<div
-		class="pointer-events-none fixed inset-x-0 top-5 z-50 flex justify-center px-5 sm:justify-end"
-	>
-		<div
-			class="pointer-events-auto flex w-full max-w-md items-start gap-3 border bg-white px-4 py-3 shadow-lg"
-			class:border-[#087ba8]={toast.tone === 'success'}
-			class:border-red-700={toast.tone === 'error'}
-			role={toast.tone === 'error' ? 'alert' : 'status'}
-		>
-			<span
-				class="mt-1 h-2 w-2 shrink-0 rounded-full"
-				class:bg-[#087ba8]={toast.tone === 'success'}
-				class:bg-red-700={toast.tone === 'error'}
-				aria-hidden="true"
-			></span>
-			<p class="flex-1 text-sm leading-6 font-semibold text-[#34404d]">{toast.message}</p>
-			<button
-				type="button"
-				class="-mt-1 -mr-1 h-7 w-7 text-lg leading-none text-[#6a7684] hover:text-[#34404d]"
-				onclick={() => (toast = null)}
-				aria-label="알림 닫기">×</button
-			>
-		</div>
-	</div>
-{/if}
+<AdminToast {toast} dismiss={() => (toast = null)} />
