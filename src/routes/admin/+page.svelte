@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { useQueryClient } from '@tanstack/svelte-query';
 	import { pushState } from '$app/navigation';
 	import { untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
@@ -28,11 +27,9 @@
 
 	let { data: initialData, form } = $props();
 	let data = $state(untrack(() => initialData));
-	let lastServerData = $state<typeof initialData | null>(null);
 	const sectionOf = (payload: typeof initialData) => payload.section;
 	const tab = $derived(sectionOf(data));
-	let activeSection = $state(untrack(() => sectionOf(initialData)));
-	const queryClient = useQueryClient();
+	const activeSection = $derived(tab);
 	let editingQuestion = $state(false);
 	const actionForm = $derived((form ?? {}) as AdminForm);
 	const questionConflict = $derived((actionForm.conflict ?? null) as QuestionConflict | null);
@@ -40,22 +37,11 @@
 	const partialScore = (points: number) => points / 2;
 
 	$effect(() => {
-		if (initialData === lastServerData) return;
-		lastServerData = initialData;
-		data = initialData;
-		activeSection = sectionOf(initialData);
-		editingQuestion = false;
-		queryClient.setQueryData(key(sectionOf(initialData)), initialData);
-	});
-
-	$effect(() => {
 		const message = actionForm.success ?? actionForm.message;
 		if (!message) return;
 		if (actionForm.success) toast.success(message);
 		else toast.error(message);
 	});
-
-	const key = (section: AdminSection) => ['admin-section', section] as const;
 
 	function reviveDates(value: unknown): unknown {
 		if (Array.isArray(value)) return value.map(reviveDates);
@@ -94,7 +80,6 @@
 	async function refreshQuestionList(selectedQuestionId: string) {
 		try {
 			const refreshed = await fetchSection('questions');
-			queryClient.setQueryData(key('questions'), refreshed);
 			if (
 				tab === 'questions' &&
 				new URL(location.href).searchParams.get('question') === selectedQuestionId
