@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { useQueryClient } from '@tanstack/svelte-query';
-	import { goto, pushState } from '$app/navigation';
+	import { pushState } from '$app/navigation';
 	import { untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { codeStatusLabel, questionTypeLabel } from '$lib/admin/presentation';
@@ -32,7 +32,6 @@
 	const sectionOf = (payload: typeof initialData) => payload.section;
 	const tab = $derived(sectionOf(data));
 	let activeSection = $state(untrack(() => sectionOf(initialData)));
-	let tabLoading = $state(false);
 	const queryClient = useQueryClient();
 	let editingQuestion = $state(false);
 	const actionForm = $derived((form ?? {}) as AdminForm);
@@ -73,28 +72,6 @@
 		const response = await fetch(`/api/admin/${section}`);
 		if (!response.ok) throw new Error('관리자 데이터를 불러오지 못했습니다.');
 		return reviveDates(await response.json()) as typeof initialData;
-	}
-
-	async function openSection(event: MouseEvent, section: AdminSection) {
-		event.preventDefault();
-		if (section === tab) return;
-		activeSection = section;
-		const cached = queryClient.getQueryData<typeof initialData>(key(section));
-		if (cached) {
-			data = cached;
-			pushState(`/admin/${section}`, {});
-			return;
-		}
-		tabLoading = true;
-		try {
-			// First visits use SvelteKit navigation so URL, server data, and form actions stay in sync.
-			await goto(`/admin/${section}`);
-		} catch {
-			activeSection = tab;
-			toast.error('관리자 데이터를 불러오지 못했습니다. 다시 시도해 주세요.');
-		} finally {
-			tabLoading = false;
-		}
 	}
 
 	function openQuestion(event: MouseEvent, question: NonNullable<typeof data.questions>[number]) {
@@ -155,7 +132,7 @@
 		<nav class="flex overflow-x-auto border-b border-[#c8d0d9]" aria-label="관리자 메뉴">
 			<a
 				href="/admin/overview"
-				onclick={(event) => openSection(event, 'overview')}
+				data-sveltekit-reload
 				class="shrink-0 border-b-2 px-5 py-3 text-sm font-semibold transition-colors"
 				class:border-[#087ba8]={activeSection === 'overview'}
 				class:text-[#087ba8]={activeSection === 'overview'}
@@ -164,7 +141,7 @@
 			>
 			<a
 				href="/admin/results"
-				onclick={(event) => openSection(event, 'results')}
+				data-sveltekit-reload
 				class="shrink-0 border-b-2 px-5 py-3 text-sm font-semibold transition-colors"
 				class:border-[#087ba8]={activeSection === 'results'}
 				class:text-[#087ba8]={activeSection === 'results'}
@@ -173,7 +150,7 @@
 			>
 			<a
 				href="/admin/codes"
-				onclick={(event) => openSection(event, 'codes')}
+				data-sveltekit-reload
 				class="shrink-0 border-b-2 px-5 py-3 text-sm font-semibold transition-colors"
 				class:border-[#087ba8]={activeSection === 'codes'}
 				class:text-[#087ba8]={activeSection === 'codes'}
@@ -182,7 +159,7 @@
 			>
 			<a
 				href="/admin/questions"
-				onclick={(event) => openSection(event, 'questions')}
+				data-sveltekit-reload
 				class="shrink-0 border-b-2 px-5 py-3 text-sm font-semibold transition-colors"
 				class:border-[#087ba8]={activeSection === 'questions'}
 				class:text-[#087ba8]={activeSection === 'questions'}
@@ -191,16 +168,13 @@
 			>
 			<a
 				href="/admin/question-new"
-				onclick={(event) => openSection(event, 'question-new')}
+				data-sveltekit-reload
 				class="shrink-0 border-b-2 px-5 py-3 text-sm font-semibold transition-colors"
 				class:border-[#087ba8]={activeSection === 'question-new'}
 				class:text-[#087ba8]={activeSection === 'question-new'}
 				class:border-transparent={activeSection !== 'question-new'}
 				aria-current={activeSection === 'question-new' ? 'page' : undefined}>문제 등록</a
 			>
-			{#if tabLoading}<span class="ml-auto self-center text-xs font-semibold text-[#6a7684]"
-					>불러오는 중…</span
-				>{/if}
 		</nav>
 
 		{#if tab === 'overview' && data.overview}
