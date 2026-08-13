@@ -1,11 +1,20 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import { navigating } from '$app/state';
+	import { afterNavigate, beforeNavigate } from '$app/navigation';
 	import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
 	import { Toaster } from '$lib/components/ui/sonner';
 	import '../app.css';
 
 	let { children } = $props();
+	let pageLoading = $state(false);
+
+	beforeNavigate(() => {
+		pageLoading = true;
+	});
+
+	afterNavigate(() => {
+		pageLoading = false;
+	});
 	const queryClient = new QueryClient({
 		defaultOptions: {
 			queries: {
@@ -26,7 +35,7 @@
 	<Toaster />
 	{@render children()}
 </QueryClientProvider>
-{#if navigating.to}
+{#if pageLoading}
 	<div
 		class="pointer-events-none fixed inset-x-0 top-0 z-[60] h-1 bg-[#087ba8]"
 		aria-hidden="true"
