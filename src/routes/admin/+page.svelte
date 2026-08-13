@@ -14,17 +14,38 @@
 		latest: ConflictQuestion;
 		draft: Omit<ConflictQuestion, 'id' | 'updatedAt'>;
 	};
+	type AdminForm = {
+		message?: string;
+		success?: string;
+		conflict?: QuestionConflict;
+	};
 
 	let { data, form } = $props();
 	const tab = $derived(data.section);
 	let editingQuestion = $state(false);
-	const questionConflict = $derived(
-		((form as { conflict?: QuestionConflict } | null)?.conflict ?? null) as QuestionConflict | null
-	);
+	const actionForm = $derived((form ?? {}) as AdminForm);
+	const questionConflict = $derived((actionForm.conflict ?? null) as QuestionConflict | null);
 	const hasQuestionConflict = $derived(Boolean(questionConflict));
+	let toast = $state<{ tone: 'success' | 'error'; message: string } | null>(null);
 	const partialScore = (points: number) => Math.max(1, Math.round(points / 2));
 	const questionType = (type: string) =>
 		type === 'multiple' ? '객관식' : type === 'short' ? '단답형' : '서술·논술형';
+	const codeStatus = (status: string, reusable = false) => {
+		if (reusable) return '테스트 · 반복 사용';
+		return (
+			{ unused: '미사용', in_progress: '응시 중', completed: '응시 완료', expired: '만료됨' }[
+				status
+			] ?? status
+		);
+	};
+
+	$effect(() => {
+		const message = actionForm.success ?? actionForm.message;
+		if (!message) return;
+		toast = { tone: actionForm.success ? 'success' : 'error', message };
+		const timeout = setTimeout(() => (toast = null), 4500);
+		return () => clearTimeout(timeout);
+	});
 </script>
 
 <main class="min-h-screen bg-[#f7f8fa]">
@@ -96,16 +117,6 @@
 				aria-current={tab === 'question-new' ? 'page' : undefined}>문제 등록</a
 			>
 		</nav>
-
-		{#if form?.message}
-			<p class="mt-5 border-l-2 border-red-700 bg-red-50 px-3 py-2 text-sm text-red-800">
-				{form.message}
-			</p>
-		{:else if form?.success}
-			<p class="mt-5 border-l-2 border-green-700 bg-green-50 px-3 py-2 text-sm text-green-800">
-				{form.success}
-			</p>
-		{/if}
 
 		{#if tab === 'overview' && data.overview}
 			<section class="py-8">
@@ -198,7 +209,8 @@
 								><tbody
 									>{#each data.overview.recentCodes as item}<tr class="border-line border-b"
 											><td class="p-3 font-mono font-bold tracking-widest">{item.code}</td><td
-												class="p-3"><span class="badge">{item.status}</span></td
+												class="p-3"
+												><span class="badge">{codeStatus(item.status, item.reusable)}</span></td
 											><td class="p-3 text-xs text-[#6a7684]"
 												>{item.createdAt.toLocaleString('ko-KR')}</td
 											></tr
@@ -505,7 +517,7 @@
 										<td class="p-3 font-mono font-bold tracking-widest">{c.code}</td>
 										<td class="p-3 font-mono text-xs">{c.discordId}</td>
 										<td class="p-3">
-											<span class="badge">{c.reusable ? '테스트 · 반복 사용' : c.status}</span>
+											<span class="badge">{codeStatus(c.status, c.reusable)}</span>
 										</td>
 										<td class="p-3 text-xs">{c.createdAt.toLocaleString('ko-KR')}</td>
 										<td class="p-3">
@@ -758,3 +770,30 @@
 		{/if}
 	</div>
 </main>
+
+{#if toast}
+	<div
+		class="pointer-events-none fixed inset-x-0 top-5 z-50 flex justify-center px-5 sm:justify-end"
+	>
+		<div
+			class="pointer-events-auto flex w-full max-w-md items-start gap-3 border bg-white px-4 py-3 shadow-lg"
+			class:border-[#087ba8]={toast.tone === 'success'}
+			class:border-red-700={toast.tone === 'error'}
+			role={toast.tone === 'error' ? 'alert' : 'status'}
+		>
+			<span
+				class="mt-1 h-2 w-2 shrink-0 rounded-full"
+				class:bg-[#087ba8]={toast.tone === 'success'}
+				class:bg-red-700={toast.tone === 'error'}
+				aria-hidden="true"
+			></span>
+			<p class="flex-1 text-sm leading-6 font-semibold text-[#34404d]">{toast.message}</p>
+			<button
+				type="button"
+				class="-mt-1 -mr-1 h-7 w-7 text-lg leading-none text-[#6a7684] hover:text-[#34404d]"
+				onclick={() => (toast = null)}
+				aria-label="알림 닫기">×</button
+			>
+		</div>
+	</div>
+{/if}
