@@ -1,10 +1,12 @@
 import adapter from '@sveltejs/adapter-auto';
+import { boundra } from 'boundra/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
 	plugins: [
+		boundra(),
 		tailwindcss(),
 		sveltekit({
 			compilerOptions: {

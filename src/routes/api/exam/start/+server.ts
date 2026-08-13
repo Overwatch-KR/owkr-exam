@@ -1,104 +1,113 @@
 import { json } from '@sveltejs/kit';
-import { z } from 'zod';
-import { and, asc, eq } from 'drizzle-orm';
+import { executeContract, implementMutation } from 'boundra';
+import { asc, eq, inArray } from 'drizzle-orm';
+import { startExamMutation } from '$lib/domains/exam/shared/public';
+import { ExamRequestError, examRequestError } from '$lib/domains/exam/server/public';
 import { database } from '$lib/server/db';
 import { attempts, examCodes, examQuestions, questions, answers } from '$lib/server/schema';
 import { user } from '$lib/server/guard';
 
-const input = z.object({
-	code: z
-		.string()
-		.trim()
-		.toUpperCase()
-		.regex(/^[A-Z0-9]{6}$/)
-});
 export const POST = async (e) => {
 	const u = user(e);
-	const parsed = input.safeParse(await e.request.json());
-	if (!parsed.success)
-		return json({ message: '올바른 6자리 코드를 입력해 주세요.' }, { status: 400 });
-	const db = database();
 	try {
-		return await db.transaction(async (tx) => {
-			const [code] = await tx
-				.select()
-				.from(examCodes)
-				.where(eq(examCodes.code, parsed.data.code))
-				.for('update');
-			if (!code) return json({ message: '존재하지 않는 코드입니다.' }, { status: 404 });
-			if (code.discordId !== u.id)
-				return json({ message: '다른 Discord 계정에 발급된 코드입니다.' }, { status: 403 });
-			let [a] = await tx.select().from(attempts).where(eq(attempts.codeId, code.id));
-			if (!a) {
-				if (code.status !== 'unused')
-					return json({ message: '이미 사용되었거나 만료된 코드입니다.' }, { status: 409 });
-				const now = new Date(),
-					expires = new Date(now.getTime() + 3600000);
-				[a] = await tx
-					.insert(attempts)
-					.values({
-						codeId: code.id,
-						discordId: u.id,
-						username: u.username,
-						displayName: u.displayName,
-						avatar: u.avatar,
-						startedAt: now,
-						expiresAt: expires
-					})
-					.returning();
-				const qs = await tx
-					.select()
-					.from(questions)
-					.where(eq(questions.active, true))
-					.orderBy(asc(questions.sortOrder));
-				if (!qs.length) return json({ message: '등록된 활성 문제가 없습니다.' }, { status: 400 });
-				const snapshot = await tx
-					.insert(examQuestions)
-					.values(
-						qs.map((q) => ({
-							attemptId: a.id,
-							sourceQuestionId: q.id,
-							type: q.type,
-							content: q.content,
-							options: q.options,
-							correctAnswer: q.correctAnswer,
-							points: q.points,
-							sortOrder: q.sortOrder
+		const result = await executeContract(
+			implementMutation(startExamMutation, async ({ code: examCode }) => {
+				const db = database();
+				return db.transaction(async (tx) => {
+					const [code] = await tx
+						.select()
+						.from(examCodes)
+						.where(eq(examCodes.code, examCode))
+						.for('update');
+					if (!code) throw new ExamRequestError(404, '존재하지 않는 코드입니다.');
+					if (code.discordId !== u.id) {
+						throw new ExamRequestError(403, '다른 Discord 계정에 발급된 코드입니다.');
+					}
+					let [attempt] = await tx.select().from(attempts).where(eq(attempts.codeId, code.id));
+					if (!attempt) {
+						if (code.status !== 'unused') {
+							throw new ExamRequestError(409, '이미 사용되었거나 만료된 코드입니다.');
+						}
+						const now = new Date();
+						const expires = new Date(now.getTime() + 3600000);
+						[attempt] = await tx
+							.insert(attempts)
+							.values({
+								codeId: code.id,
+								discordId: u.id,
+								username: u.username,
+								displayName: u.displayName,
+								avatar: u.avatar,
+								startedAt: now,
+								expiresAt: expires
+							})
+							.returning();
+						const sourceQuestions = await tx
+							.select()
+							.from(questions)
+							.where(eq(questions.active, true))
+							.orderBy(asc(questions.sortOrder));
+						if (!sourceQuestions.length) {
+							throw new ExamRequestError(400, '등록된 활성 문제가 없습니다.');
+						}
+						await tx.insert(examQuestions).values(
+							sourceQuestions.map((question) => ({
+								attemptId: attempt.id,
+								sourceQuestionId: question.id,
+								type: question.type,
+								content: question.content,
+								options: question.options,
+								correctAnswer: question.correctAnswer,
+								points: question.points,
+								sortOrder: question.sortOrder
+							}))
+						);
+						await tx
+							.update(examCodes)
+							.set({ status: 'in_progress', startedAt: now })
+							.where(eq(examCodes.id, code.id));
+					}
+					if (attempt.submittedAt) {
+						throw new ExamRequestError(409, '이미 제출된 시험입니다.');
+					}
+					const examQuestionRows = await tx
+						.select()
+						.from(examQuestions)
+						.where(eq(examQuestions.attemptId, attempt.id))
+						.orderBy(asc(examQuestions.sortOrder));
+					const savedAnswers = examQuestionRows.length
+						? await tx
+								.select()
+								.from(answers)
+								.where(
+									inArray(
+										answers.attemptQuestionId,
+										examQuestionRows.map((question) => question.id)
+									)
+								)
+						: [];
+					return {
+						id: attempt.id,
+						expiresAt: attempt.expiresAt.toISOString(),
+						questions: examQuestionRows.map((question) => ({
+							id: question.id,
+							type: question.type as 'multiple' | 'short' | 'essay',
+							content: question.content,
+							options: question.options ?? [],
+							points: question.points,
+							answer:
+								savedAnswers.find((answer) => answer.attemptQuestionId === question.id)?.value || ''
 						}))
-					)
-					.returning();
-				await tx
-					.update(examCodes)
-					.set({
-						status: 'in_progress',
-						startedAt: now
-					})
-					.where(eq(examCodes.id, code.id));
-			}
-			if (a.submittedAt) return json({ message: '이미 제출된 시험입니다.' }, { status: 409 });
-			const qs = await tx
-				.select()
-				.from(examQuestions)
-				.where(eq(examQuestions.attemptId, a.id))
-				.orderBy(asc(examQuestions.sortOrder));
-			const old = await tx
-				.select()
-				.from(answers)
-				.where(eq(answers.attemptQuestionId, qs[0]?.id || ''));
-			return json({
-				id: a.id,
-				expiresAt: a.expiresAt,
-				questions: qs.map((q) => ({
-					id: q.id,
-					type: q.type,
-					content: q.content,
-					options: q.options,
-					points: q.points,
-					answer: old.find((x) => x.attemptQuestionId === q.id)?.value || ''
-				}))
-			});
-		});
+					};
+				});
+			}),
+			await e.request.json()
+		);
+		return json(result);
 	} catch (err) {
+		const requestError = examRequestError(err, '올바른 6자리 코드를 입력해 주세요.');
+		if (requestError)
+			return json({ message: requestError.message }, { status: requestError.status });
 		console.error(err);
 		return json({ message: '시험을 시작하지 못했습니다.' }, { status: 500 });
 	}

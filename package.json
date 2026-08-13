@@ -10,6 +10,8 @@
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"check:naming": "node scripts/check-kebab-case.mjs",
+		"check:boundaries": "boundra check-boundaries --format json",
+		"graph:domains": "boundra graph-domains --format mermaid",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -33,6 +35,7 @@
 		"vite": "^8.0.16"
 	},
 	"dependencies": {
+		"boundra": "0.2.1",
 		"drizzle-orm": "^0.45.2",
 		"postgres": "^3.4.9",
 		"zod": "^4.4.3"

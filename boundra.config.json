@@ -1,0 +1,38 @@
+{
+	"$schema": "https://boundra.dev/schemas/boundra-config.v1.json",
+	"version": 1,
+	"project": {
+		"name": "owkr-exam",
+		"workspaceRoot": "."
+	},
+	"paths": {
+		"apps": "src/routes",
+		"domains": "src/lib/domains",
+		"packages": "packages",
+		"crates": "crates"
+	},
+	"domain": {
+		"manifestFile": "domain.json",
+		"publicApi": {
+			"client": ["./client/public.ts"],
+			"server": ["./server/public.ts"],
+			"shared": ["./shared/public.ts"]
+		}
+	},
+	"checkBoundaries": {
+		"includeExtensions": ["ts", "tsx", "js", "jsx", "svelte"],
+		"ignore": [
+			"**/node_modules/**",
+			"**/.next/**",
+			"**/.svelte-kit/**",
+			"**/.turbo/**",
+			"**/.vercel/**",
+			"**/.pnpm-store/**",
+			"**/.claude/worktrees/**",
+			"**/dist/**",
+			"**/build/**",
+			"**/coverage/**",
+			"**/target/**"
+		]
+	}
+}

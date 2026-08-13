@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      boundra:
+        specifier: 0.2.1
+        version: 0.2.1
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(postgres@3.4.9)
@@ -794,6 +797,11 @@ packages:
   axobject-query@4.1.0:
     resolution: {integrity: sha512-qIj0G9wZbMGNLjLmg1PT6v2mE9AH2zlnADJD/2tC6E00hgmhUOfEB6greHPAfLRSufHqROIUTkw6E+M3lH0PTQ==}
     engines: {node: '>= 0.4'}
+
+  boundra@0.2.1:
+    resolution: {integrity: sha512-Mfy1AMfKjumwVk3uk2KA4hNCMb4cGoskCwaA6CVhys7Xdt5zCMRhKA9VkxqGegs0+um1oE9rvpIofJtLR8/RiA==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   buffer-from@1.1.2:
     resolution: {integrity: sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==}
@@ -1797,6 +1805,8 @@ snapshots:
   aria-query@5.3.1: {}
 
   axobject-query@4.1.0: {}
+
+  boundra@0.2.1: {}
 
   buffer-from@1.1.2: {}
 

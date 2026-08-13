@@ -1,10 +1,23 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import {
+		examErrorMessage,
+		saveAnswer,
+		startExam,
+		submitExam,
+		type ExamAttempt
+	} from '$lib/domains/exam/client/public';
+
+	type ExamSession = ExamAttempt & {
+		submittedAt?: string;
+		objectiveScore?: number;
+		objectiveMaxScore?: number;
+	};
 
 	let { data } = $props();
 	let code = $state('');
 	let message = $state('');
-	let attempt = $state<any>(null);
+	let attempt = $state<ExamSession | null>(null);
 	let index = $state(0);
 	let values = $state<Record<string, string>>({});
 	let saving = $state('');
@@ -23,7 +36,6 @@
 		};
 		const onPop = () => location.replace('/exam');
 		addEventListener('pageshow', onShow);
-		history.replaceState({ examRoot: true }, '', '/exam');
 		addEventListener('popstate', onPop);
 		return () => {
 			clearInterval(timer);
@@ -38,19 +50,16 @@
 
 	async function start() {
 		message = '';
-		const r = await fetch('/api/exam/start', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ code })
-		});
-		const j = await r.json();
-		if (!r.ok) {
-			message = j.message;
-			return;
+		try {
+			const started = await startExam({ code });
+			attempt = started;
+			values = Object.fromEntries(
+				started.questions.map((question) => [question.id, question.answer])
+			);
+			remaining = new Date(started.expiresAt).getTime() - Date.now();
+		} catch (error) {
+			message = examErrorMessage(error, '올바른 6자리 코드를 입력해 주세요.');
 		}
-		attempt = j;
-		values = Object.fromEntries(j.questions.map((x: any) => [x.id, x.answer || '']));
-		remaining = new Date(j.expiresAt).getTime() - Date.now();
 	}
 
 	let timers: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -59,32 +68,27 @@
 		clearTimeout(timers[id]);
 		timers[id] = setTimeout(async () => {
 			saving = '저장 중';
-			const r = await fetch('/api/exam/answer', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ attemptQuestionId: id, value: values[id] })
-			});
-			saving = r.ok ? '저장됨' : '저장 실패';
+			try {
+				await saveAnswer({ attemptQuestionId: id, value: values[id] ?? '' });
+				saving = '저장됨';
+			} catch {
+				saving = '저장 실패';
+			}
 		}, 500);
 	}
 
 	async function submit(timeout = false) {
 		if (!attempt) return;
-		const r = await fetch('/api/exam/submit', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ attemptId: attempt.id, timeout })
-		});
-		const j = await r.json();
-		if (r.ok) {
+		try {
+			const submitted = await submitExam({ attemptId: attempt.id, timeout });
 			attempt = {
 				...attempt,
-				submittedAt: j.submittedAt,
-				objectiveScore: j.objectiveScore,
-				objectiveMaxScore: j.objectiveMaxScore
+				...submitted
 			};
 			confirm = false;
-		} else message = j.message;
+		} catch (error) {
+			message = examErrorMessage(error, '시험을 제출하지 못했습니다.');
+		}
 	}
 </script>
 
@@ -246,7 +250,7 @@
 					<h2 class="text-xl font-bold">시험을 제출할까요?</h2>
 					<p class="mt-4 text-sm leading-6 text-[#6a7684]">
 						제출 후에는 답안을 수정하거나 다시 응시할 수 없습니다.<br />미응답 문항:
-						<b>{attempt.questions.filter((item: any) => !values[item.id]?.trim()).length}개</b>
+						<b>{attempt.questions.filter((item) => !values[item.id]?.trim()).length}개</b>
 					</p>
 					<div class="mt-7 flex justify-end gap-2">
 						<button class="btn-secondary" onclick={() => (confirm = false)}>계속 작성</button>

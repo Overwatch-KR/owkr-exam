@@ -24,3 +24,11 @@ Prettier와 Svelte/Tailwind 플러그인을 사용합니다.
 - 정렬: `pnpm format`
 - 정렬 확인: `pnpm format:check`
 - 타입 및 Svelte 확인: `pnpm check`
+
+## 도메인 경계
+
+Boundra 계약과 도메인 코드는 `src/lib/domains` 아래에 둡니다. SvelteKit 라우트는 도메인의
+`client/public.ts`, `server/public.ts`, `shared/public.ts` 공개 진입점만 사용합니다.
+
+- 경계 검사: `pnpm check:boundaries`
+- 도메인 그래프: `pnpm graph:domains`
