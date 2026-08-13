@@ -54,8 +54,8 @@
 		);
 	}
 
-	async function fetchSection(section: AdminSection) {
-		const response = await fetch(`/api/admin/${section}`);
+	async function fetchSection(section: AdminSection, search = '') {
+		const response = await fetch(`/api/admin/${section}${search}`);
 		if (!response.ok) throw new Error('관리자 데이터를 불러오지 못했습니다.');
 		return reviveDates(await response.json()) as typeof initialData;
 	}
@@ -79,7 +79,10 @@
 
 	async function refreshQuestionList(selectedQuestionId: string) {
 		try {
-			const refreshed = await fetchSection('questions');
+			const refreshed = await fetchSection(
+				'questions',
+				`?question=${encodeURIComponent(selectedQuestionId)}`
+			);
 			if (
 				tab === 'questions' &&
 				new URL(location.href).searchParams.get('question') === selectedQuestionId
