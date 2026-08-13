@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { useQueryClient } from '@tanstack/svelte-query';
 	import { onMount, untrack } from 'svelte';
+	import { toast } from 'svelte-sonner';
 	import { codeStatusLabel, questionTypeLabel } from '$lib/admin/presentation';
-	import AppToast from '$lib/components/app-toast.svelte';
 	import QuestionEditor from '$lib/components/question-editor.svelte';
 
 	type ConflictQuestion = {
@@ -36,15 +36,13 @@
 	const actionForm = $derived((form ?? {}) as AdminForm);
 	const questionConflict = $derived((actionForm.conflict ?? null) as QuestionConflict | null);
 	const hasQuestionConflict = $derived(Boolean(questionConflict));
-	let toast = $state<{ tone: 'success' | 'error'; message: string } | null>(null);
 	const partialScore = (points: number) => points / 2;
 
 	$effect(() => {
 		const message = actionForm.success ?? actionForm.message;
 		if (!message) return;
-		toast = { tone: actionForm.success ? 'success' : 'error', message };
-		const timeout = setTimeout(() => (toast = null), 4500);
-		return () => clearTimeout(timeout);
+		if (actionForm.success) toast.success(message);
+		else toast.error(message);
 	});
 
 	const sections: AdminSection[] = ['overview', 'results', 'codes', 'questions', 'question-new'];
@@ -87,10 +85,7 @@
 			history.pushState({}, '', `/admin/${section}`);
 		} catch {
 			activeSection = tab;
-			toast = {
-				tone: 'error',
-				message: '관리자 데이터를 불러오지 못했습니다. 다시 시도해 주세요.'
-			};
+			toast.error('관리자 데이터를 불러오지 못했습니다. 다시 시도해 주세요.');
 		} finally {
 			tabLoading = false;
 		}
@@ -842,5 +837,3 @@
 		{/if}
 	</div>
 </main>
-
-<AppToast {toast} dismiss={() => (toast = null)} />

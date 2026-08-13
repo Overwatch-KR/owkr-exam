@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import AppToast from '$lib/components/app-toast.svelte';
+	import { toast } from 'svelte-sonner';
 	import {
 		examErrorMessage,
 		saveAnswer,
@@ -23,7 +23,6 @@
 	let index = $state(0);
 	let values = $state<Record<string, string>>({});
 	let saveError = $state('');
-	let toast = $state<{ tone: 'success' | 'error'; message: string } | null>(null);
 	let remaining = $state(0);
 	let confirm = $state(false);
 	let q = $derived(attempt?.questions[index]);
@@ -127,10 +126,9 @@
 			};
 			confirm = false;
 		} catch (error) {
-			toast = {
-				tone: 'error',
-				message: examErrorMessage(error, '시험을 제출하지 못했습니다. 잠시 후 다시 시도해 주세요.')
-			};
+			toast.error(
+				examErrorMessage(error, '시험을 제출하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+			);
 		}
 	}
 </script>
@@ -346,5 +344,3 @@
 		</div>
 	{/if}
 {/if}
-
-<AppToast {toast} dismiss={() => (toast = null)} />
