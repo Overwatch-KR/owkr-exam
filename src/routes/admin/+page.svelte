@@ -37,7 +37,7 @@
 	const questionConflict = $derived((actionForm.conflict ?? null) as QuestionConflict | null);
 	const hasQuestionConflict = $derived(Boolean(questionConflict));
 	let toast = $state<{ tone: 'success' | 'error'; message: string } | null>(null);
-	const partialScore = (points: number) => Math.max(1, Math.round(points / 2));
+	const partialScore = (points: number) => points / 2;
 
 	$effect(() => {
 		const message = actionForm.success ?? actionForm.message;
@@ -713,6 +713,7 @@
 													id={`score-${q.id}`}
 													name="score"
 													type="number"
+													step="0.01"
 													value={q.score ?? ''}
 													required
 													class="w-20"
@@ -749,6 +750,7 @@
 													id={`score-${q.id}`}
 													name="score"
 													type="number"
+													step="0.01"
 													value={q.score ?? ''}
 													required
 													class="w-20"

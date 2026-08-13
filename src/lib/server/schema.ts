@@ -3,6 +3,7 @@ import {
 	text,
 	timestamp,
 	integer,
+	numeric,
 	jsonb,
 	boolean,
 	uuid,
@@ -16,7 +17,7 @@ export const questions = pgTable('questions', {
 	content: text('content').notNull(),
 	options: jsonb('options').$type<string[]>(),
 	correctAnswer: integer('correct_answer'),
-	points: integer('points').notNull(),
+	points: numeric('points', { precision: 10, scale: 2, mode: 'number' }).notNull(),
 	sortOrder: integer('sort_order').notNull(),
 	active: boolean('active').notNull().default(true),
 	createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -49,9 +50,11 @@ export const attempts = pgTable(
 		expiresAt: timestamp('expires_at').notNull(),
 		submittedAt: timestamp('submitted_at'),
 		timedOut: boolean('timed_out').notNull().default(false),
-		objectiveScore: integer('objective_score').notNull().default(0),
-		subjectiveScore: integer('subjective_score'),
-		totalScore: integer('total_score')
+		objectiveScore: numeric('objective_score', { precision: 10, scale: 2, mode: 'number' })
+			.notNull()
+			.default(0),
+		subjectiveScore: numeric('subjective_score', { precision: 10, scale: 2, mode: 'number' }),
+		totalScore: numeric('total_score', { precision: 10, scale: 2, mode: 'number' })
 	},
 	(t) => [index('attempt_code_id_idx').on(t.codeId)]
 );
@@ -65,7 +68,7 @@ export const examQuestions = pgTable('exam_questions', {
 	content: text('content').notNull(),
 	options: jsonb('options').$type<string[]>(),
 	correctAnswer: integer('correct_answer'),
-	points: integer('points').notNull(),
+	points: numeric('points', { precision: 10, scale: 2, mode: 'number' }).notNull(),
 	sortOrder: integer('sort_order').notNull()
 });
 export const answers = pgTable(
@@ -76,7 +79,7 @@ export const answers = pgTable(
 			.notNull()
 			.references(() => examQuestions.id, { onDelete: 'cascade' }),
 		value: text('value').notNull().default(''),
-		score: integer('score'),
+		score: numeric('score', { precision: 10, scale: 2, mode: 'number' }),
 		updatedAt: timestamp('updated_at').notNull().defaultNow()
 	},
 	(t) => [uniqueIndex('answer_one_per_question').on(t.attemptQuestionId)]

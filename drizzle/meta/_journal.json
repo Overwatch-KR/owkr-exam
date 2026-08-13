@@ -22,6 +22,13 @@
       "when": 1786624267043,
       "tag": "0002_reusable-test-code",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786626112176,
+      "tag": "0003_decimal_scores",
+      "breakpoints": true
     }
   ]
 }

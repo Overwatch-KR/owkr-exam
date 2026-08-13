@@ -101,6 +101,7 @@
 					id={`points-${question?.id || 'new'}`}
 					name="points"
 					type="number"
+					step="0.01"
 					bind:value={points}
 					required
 					class="w-full pr-9"

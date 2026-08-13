@@ -21,7 +21,7 @@ function questionInput(data: FormData) {
 	if (
 		!['multiple', 'short', 'essay'].includes(type) ||
 		!content ||
-		!Number.isInteger(points) ||
+		!Number.isFinite(points) ||
 		points <= 0
 	) {
 		return { error: '문제 유형, 내용과 배점을 확인해 주세요.' } as const;
@@ -139,8 +139,8 @@ export const actions = {
 		if (!attempt?.submittedAt || !question || question.type === 'multiple') {
 			return fail(400, { message: '채점할 수 있는 답안을 찾지 못했습니다.' });
 		}
-		if (!Number.isInteger(score) || score < 0) {
-			return fail(400, { message: '점수는 0점 이상의 정수로 입력해 주세요.' });
+		if (!Number.isFinite(score) || score < 0) {
+			return fail(400, { message: '점수는 0점 이상의 숫자로 입력해 주세요.' });
 		}
 
 		await db
