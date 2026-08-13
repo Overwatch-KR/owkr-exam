@@ -27,6 +27,9 @@
 	let remaining = $state(0);
 	let confirm = $state(false);
 	let q = $derived(attempt?.questions[index]);
+	let answeredCount = $derived(
+		attempt?.questions.filter((item) => values[item.id]?.trim()).length ?? 0
+	);
 	onMount(() => {
 		const timer = setInterval(() => {
 			if (attempt) {
@@ -280,37 +283,44 @@
 		</section>
 	</main>
 {:else}
-	<main class="min-h-screen bg-[#f7f8fa]">
+	<main class="min-h-screen bg-[#f3f5f7]">
 		<header class="site-header">
-			<div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
+			<div class="mx-auto flex h-16 max-w-[1320px] items-center justify-between px-5 sm:px-8">
 				<span class="wordmark">OWKR EXAM</span>
 				<div class="text-right">
-					<p class="text-[10px] font-semibold tracking-widest text-[#6a7684]">남은 시간</p>
-					<p class="font-mono text-lg font-bold text-[#087ba8] tabular-nums">{fmt(remaining)}</p>
+					<p class="text-[10px] font-semibold tracking-[0.12em] text-[#6a7684]">남은 시간</p>
+					<p class="font-mono text-xl font-bold text-[#087ba8] tabular-nums">{fmt(remaining)}</p>
 				</div>
 			</div>
 		</header>
-		<div class="mx-auto max-w-6xl px-5 py-7">
-			<div class="mb-4 flex items-end justify-between border-b border-[#c8d0d9] pb-4">
+		<div class="mx-auto max-w-[1320px] px-5 py-6 sm:px-8 sm:py-8">
+			<div class="mb-5 flex items-end justify-between border-b-2 border-[#34404d] pb-4">
 				<div>
-					<p class="text-sm font-semibold">OWKR 관리자 선발시험</p>
-					<p class="mt-1 text-xs text-[#6a7684]">문제 {index + 1} / {attempt.questions.length}</p>
+					<p class="text-base font-bold tracking-[-.02em]">OWKR 관리자 선발시험</p>
+					<p class="mt-1 text-xs text-[#6a7684]">
+						문제 {index + 1} / {attempt.questions.length} · 답변 {answeredCount}개
+					</p>
 				</div>
 				{#if saveError}<p role="alert" class="notice-error max-w-sm text-xs">
 						{saveError}
 					</p>{/if}
 			</div>
-			<div class="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
-				<aside class="card h-fit p-4 lg:sticky lg:top-5">
-					<p class="mb-3 text-xs font-semibold text-[#34404d]">문항 목록</p>
-					<div class="grid grid-cols-5 gap-1.5">
+			<div class="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
+				<aside class="h-fit border border-[#bfd4df] bg-[#eaf7fb] p-4 lg:sticky lg:top-5">
+					<div class="mb-4 flex items-baseline justify-between">
+						<p class="text-sm font-bold text-[#24333f]">문항 목록</p>
+						<span class="font-mono text-xs font-bold text-[#087ba8]"
+							>{answeredCount}/{attempt.questions.length}</span
+						>
+					</div>
+					<div class="grid grid-cols-6 gap-1.5 lg:grid-cols-5">
 						{#each attempt.questions as item, i}
 							<button
 								type="button"
 								aria-label={`${i + 1}번 문제${values[item.id]?.trim() ? ', 답변 있음' : ', 미응답'}`}
 								aria-current={i === index ? 'step' : undefined}
 								onclick={() => (index = i)}
-								class="h-9 rounded-md border text-xs font-semibold {i === index
+								class="h-9 border text-xs font-semibold transition-colors {i === index
 									? 'border-[#087ba8] bg-[#087ba8] text-white'
 									: values[item.id]?.trim()
 										? 'border-[#b7dce9] bg-[#effbff] text-[#087ba8]'
@@ -318,31 +328,35 @@
 							>
 						{/each}
 					</div>
-					<p class="mt-3 text-[11px] leading-5 text-[#6a7684]">
-						연한 파랑: 답변 저장됨<br />진한 파랑: 현재 문제
+					<p class="mt-4 border-t border-[#bfd4df] pt-3 text-[11px] leading-5 text-[#52616e]">
+						연한 파랑: 답변 완료<br />진한 파랑: 현재 문제
 					</p>
-					<p class="mt-3 border-t border-[#dfe4e9] pt-3 text-[11px] leading-5 text-[#6a7684]">
+					<p class="mt-3 text-[11px] leading-5 text-[#52616e]">
 						Shift + Enter: 다음 문제<br />1–5: 객관식 선택
 					</p>
-					<button type="button" class="btn mt-6 w-full" onclick={() => (confirm = true)}
+					<button type="button" class="btn mt-5 w-full" onclick={() => (confirm = true)}
 						>시험 제출</button
 					>
 				</aside>
 				{#if q}
-					<section class="card p-6 sm:p-8">
-						<div class="border-b border-[#dfe4e9] pb-5">
+					<section
+						class="border border-[#d5dce2] bg-white p-6 shadow-[0_1px_1px_rgba(17,24,32,0.02)] sm:p-9"
+					>
+						<div class="border-b-2 border-[#34404d] pb-6">
 							<div class="flex items-baseline justify-between">
-								<p class="text-sm font-semibold text-[#087ba8]">문제 {index + 1}</p>
-								<span class="text-sm text-[#6a7684]">배점 {q.points}점</span>
+								<p class="font-mono text-sm font-bold text-[#087ba8]">문제 {index + 1}</p>
+								<span class="text-sm font-semibold text-[#52616e]">배점 {q.points}점</span>
 							</div>
-							<h1 class="mt-5 text-xl leading-9 font-medium tracking-[-.02em] whitespace-pre-wrap">
+							<h1
+								class="mt-6 text-xl leading-9 font-medium tracking-[-.02em] whitespace-pre-wrap sm:text-[22px]"
+							>
 								{q.content}
 							</h1>
 						</div>
 						{#if q.type === 'multiple'}
-							<div class="mt-8 border border-[#dfe4e9]">
+							<div class="mt-8 border border-[#cfd8df]">
 								{#each q.options as option, i}<label
-										class="flex cursor-pointer gap-4 border-b border-[#dfe4e9] bg-white px-4 py-4 last:border-0 hover:bg-[#f5fbfd]"
+										class="flex cursor-pointer gap-4 border-b border-[#dfe4e9] bg-white px-5 py-4 last:border-0 hover:bg-[#f5fbfd]"
 										><input
 											type="radio"
 											name={q.id}
@@ -363,7 +377,7 @@
 								placeholder={q.type === 'short'
 									? '답변을 입력하세요.'
 									: '답변을 충분히 작성하세요.'}></textarea>{/if}
-						<div class="mt-8 flex justify-between border-t border-[#dfe4e9] pt-5">
+						<div class="mt-8 flex justify-between border-t-2 border-[#34404d] pt-5">
 							<button
 								type="button"
 								class="btn-secondary"
