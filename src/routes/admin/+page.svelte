@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { useQueryClient } from '@tanstack/svelte-query';
+	import { pushState } from '$app/navigation';
 	import { onMount, untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { codeStatusLabel, questionTypeLabel } from '$lib/admin/presentation';
@@ -27,6 +28,7 @@
 
 	let { data: initialData, form } = $props();
 	let data = $state(untrack(() => initialData));
+	let lastServerData = $state<typeof initialData | null>(null);
 	const sectionOf = (payload: typeof initialData) => payload.section;
 	const tab = $derived(sectionOf(data));
 	let activeSection = $state(untrack(() => sectionOf(initialData)));
@@ -37,6 +39,15 @@
 	const questionConflict = $derived((actionForm.conflict ?? null) as QuestionConflict | null);
 	const hasQuestionConflict = $derived(Boolean(questionConflict));
 	const partialScore = (points: number) => points / 2;
+
+	$effect(() => {
+		if (initialData === lastServerData) return;
+		lastServerData = initialData;
+		data = initialData;
+		activeSection = sectionOf(initialData);
+		editingQuestion = false;
+		queryClient.setQueryData(key(sectionOf(initialData)), initialData);
+	});
 
 	$effect(() => {
 		const message = actionForm.success ?? actionForm.message;
@@ -72,7 +83,7 @@
 		const cached = queryClient.getQueryData<typeof initialData>(key(section));
 		if (cached) {
 			data = cached;
-			history.pushState({}, '', `/admin/${section}`);
+			pushState(`/admin/${section}`, {});
 			return;
 		}
 		tabLoading = true;
@@ -82,7 +93,7 @@
 				queryFn: () => fetchSection(section),
 				staleTime: 5 * 60_000
 			});
-			history.pushState({}, '', `/admin/${section}`);
+			pushState(`/admin/${section}`, {});
 		} catch {
 			activeSection = tab;
 			toast.error('관리자 데이터를 불러오지 못했습니다. 다시 시도해 주세요.');
