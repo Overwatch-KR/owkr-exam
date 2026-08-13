@@ -82,7 +82,7 @@
 			data = await queryClient.fetchQuery({
 				queryKey: key(section),
 				queryFn: () => fetchSection(section),
-				staleTime: 60_000
+				staleTime: 5 * 60_000
 			});
 			history.pushState({}, '', `/admin/${section}`);
 		} catch {
@@ -105,7 +105,7 @@
 					queryClient.prefetchQuery({
 						queryKey: key(section),
 						queryFn: () => fetchSection(section),
-						staleTime: 60_000
+						staleTime: 5 * 60_000
 					})
 				)
 		);

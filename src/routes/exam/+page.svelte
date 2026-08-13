@@ -17,6 +17,7 @@
 	let { data } = $props();
 	let code = $state('');
 	let message = $state('');
+	let starting = $state(false);
 	let attempt = $state<ExamSession | null>(null);
 	let index = $state(0);
 	let values = $state<Record<string, string>>({});
@@ -74,6 +75,7 @@
 
 	async function start() {
 		message = '';
+		starting = true;
 		try {
 			const started = await startExam({ code: code.trim().toUpperCase() });
 			attempt = started;
@@ -83,6 +85,8 @@
 			remaining = new Date(started.expiresAt).getTime() - Date.now();
 		} catch (error) {
 			message = examErrorMessage(error, '올바른 6자리 코드를 입력해 주세요.');
+		} finally {
+			starting = false;
 		}
 	}
 
@@ -145,6 +149,7 @@
 				</p>
 				<form
 					class="mt-8 border-y border-[#c8d0d9] py-6"
+					aria-busy={starting}
 					onsubmit={(event) => {
 						event.preventDefault();
 						start();
@@ -164,7 +169,12 @@
 						placeholder="A7K3PX"
 					/>
 					<p id="code-help" class="mt-2 text-xs text-[#6a7684]">영문과 숫자 6자리</p>
-					<button class="btn mt-4 w-full">시험 시작</button>
+					<button class="btn mt-4 w-full" disabled={starting}>
+						{starting ? '시험 준비 중…' : '시험 시작'}
+					</button>
+					{#if starting}<p class="mt-3 text-center text-xs text-[#6a7684]">
+							시험 문제를 준비하고 있습니다.
+						</p>{/if}
 					{#if message}<p
 							id="code-error"
 							role="alert"
