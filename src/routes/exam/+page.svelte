@@ -26,10 +26,15 @@
 	let saveError = $state('');
 	let remaining = $state(0);
 	let confirm = $state(false);
+	let confirmDialog = $state<HTMLDivElement>();
 	let q = $derived(attempt?.questions[index]);
 	let answeredCount = $derived(
 		attempt?.questions.filter((item) => values[item.id]?.trim()).length ?? 0
 	);
+
+	$effect(() => {
+		if (confirm) confirmDialog?.focus();
+	});
 	onMount(() => {
 		const timer = setInterval(() => {
 			if (attempt) {
@@ -398,10 +403,13 @@
 		</div>
 	</main>
 	{#if confirm}
-		<div class="fixed inset-0 grid place-items-center bg-black/45 p-5">
-			<dialog
-				open
-				class="w-full max-w-md rounded-md border-0 bg-white p-0 shadow-xl"
+		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-5">
+			<div
+				bind:this={confirmDialog}
+				role="dialog"
+				aria-modal="true"
+				tabindex="-1"
+				class="w-full max-w-md overflow-hidden rounded-lg bg-white shadow-[0_24px_64px_rgba(17,24,32,0.28)]"
 				aria-labelledby="submit-dialog-title"
 				aria-describedby="submit-dialog-description"
 			>
@@ -421,7 +429,7 @@
 						<button type="button" class="btn" onclick={() => submit()}>제출하기</button>
 					</div>
 				</div>
-			</dialog>
+			</div>
 		</div>
 	{/if}
 {/if}
