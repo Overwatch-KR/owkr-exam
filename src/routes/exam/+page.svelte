@@ -35,12 +35,17 @@
 			if (e.persisted) location.replace('/exam');
 		};
 		const onPop = () => location.replace('/exam');
+		const onKeydown = (event: KeyboardEvent) => {
+			if (event.key === 'Escape' && confirm) confirm = false;
+		};
 		addEventListener('pageshow', onShow);
 		addEventListener('popstate', onPop);
+		addEventListener('keydown', onKeydown);
 		return () => {
 			clearInterval(timer);
 			removeEventListener('pageshow', onShow);
 			removeEventListener('popstate', onPop);
+			removeEventListener('keydown', onKeydown);
 		};
 	});
 	const fmt = (ms: number) =>
@@ -51,7 +56,7 @@
 	async function start() {
 		message = '';
 		try {
-			const started = await startExam({ code });
+			const started = await startExam({ code: code.trim().toUpperCase() });
 			attempt = started;
 			values = Object.fromEntries(
 				started.questions.map((question) => [question.id, question.answer])
@@ -110,17 +115,36 @@
 				<p class="mt-3 text-sm leading-6 text-[#6a7684]">
 					운영진에게 받은 6자리 코드를 입력하세요.<br />시험 시작 후 제한시간 60분이 적용됩니다.
 				</p>
-				<div class="mt-8 border-y border-[#c8d0d9] py-6">
+				<form
+					class="mt-8 border-y border-[#c8d0d9] py-6"
+					onsubmit={(event) => {
+						event.preventDefault();
+						start();
+					}}
+				>
 					<label class="label" for="code">응시 코드</label><input
 						id="code"
 						bind:value={code}
+						autocapitalize="characters"
+						autocomplete="off"
+						spellcheck="false"
 						maxlength="6"
+						required
+						aria-describedby={message ? 'code-help code-error' : 'code-help'}
+						aria-invalid={Boolean(message)}
 						class="w-full text-center font-mono text-xl font-bold tracking-[0.42em] uppercase"
 						placeholder="A7K3PX"
 					/>
-					<button class="btn mt-4 w-full" onclick={start}>시험 시작</button>
-					{#if message}<p class="mt-3 text-sm font-semibold text-red-700">{message}</p>{/if}
-				</div>
+					<p id="code-help" class="mt-2 text-xs text-[#6a7684]">영문과 숫자 6자리</p>
+					<button class="btn mt-4 w-full">시험 시작</button>
+					{#if message}<p
+							id="code-error"
+							role="alert"
+							class="mt-3 text-sm font-semibold text-red-700"
+						>
+							{message}
+						</p>{/if}
+				</form>
 			</div>
 		</section>
 	</main>
@@ -167,7 +191,9 @@
 					<p class="text-sm font-semibold">OWKR 관리자 선발시험</p>
 					<p class="mt-1 text-xs text-[#6a7684]">문제 {index + 1} / {attempt.questions.length}</p>
 				</div>
-				<span class="text-xs text-[#6a7684]">{saving || '답안은 자동 저장됩니다.'}</span>
+				<span class="text-xs text-[#6a7684]" aria-live="polite"
+					>{saving || '답안은 자동 저장됩니다.'}</span
+				>
 			</div>
 			<div class="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
 				<aside class="card h-fit p-4">
@@ -175,7 +201,9 @@
 					<div class="grid grid-cols-5 gap-1.5">
 						{#each attempt.questions as item, i}
 							<button
-								aria-label={`${i + 1}번 문제`}
+								type="button"
+								aria-label={`${i + 1}번 문제${values[item.id]?.trim() ? ', 답변 있음' : ', 미응답'}`}
+								aria-current={i === index ? 'step' : undefined}
 								onclick={() => (index = i)}
 								class="h-9 rounded-md border text-xs font-semibold {i === index
 									? 'border-[#087ba8] bg-[#087ba8] text-white'
@@ -188,7 +216,9 @@
 					<p class="mt-3 text-[11px] leading-5 text-[#6a7684]">
 						연한 파랑: 답변 저장됨<br />진한 파랑: 현재 문제
 					</p>
-					<button class="btn mt-6 w-full" onclick={() => (confirm = true)}>시험 제출</button>
+					<button type="button" class="btn mt-6 w-full" onclick={() => (confirm = true)}
+						>시험 제출</button
+					>
 				</aside>
 				{#if q}
 					<section class="card p-6 sm:p-8">
@@ -218,6 +248,7 @@
 									>{/each}
 							</div>
 						{:else}<textarea
+								aria-label={`${index + 1}번 문제 답안`}
 								class="mt-8 min-h-52 w-full leading-7"
 								bind:value={values[q.id]}
 								oninput={() => save(q.id)}
@@ -225,10 +256,14 @@
 									? '답변을 입력하세요.'
 									: '답변을 충분히 작성하세요.'}></textarea>{/if}
 						<div class="mt-8 flex justify-between border-t border-[#dfe4e9] pt-5">
-							<button class="btn-secondary" disabled={index === 0} onclick={() => index--}
-								>← 이전 문제</button
+							<button
+								type="button"
+								class="btn-secondary"
+								disabled={index === 0}
+								onclick={() => index--}>← 이전 문제</button
 							>
 							<button
+								type="button"
 								class="btn-secondary"
 								disabled={index === attempt.questions.length - 1}
 								onclick={() => index++}
@@ -242,22 +277,29 @@
 	</main>
 	{#if confirm}
 		<div class="fixed inset-0 grid place-items-center bg-black/45 p-5">
-			<section class="w-full max-w-md rounded-md bg-white shadow-xl">
+			<dialog
+				open
+				class="w-full max-w-md rounded-md border-0 bg-white p-0 shadow-xl"
+				aria-labelledby="submit-dialog-title"
+				aria-describedby="submit-dialog-description"
+			>
 				<div class="border-b border-[#dfe4e9] px-6 py-4">
 					<p class="text-sm font-semibold">답안 제출 확인</p>
 				</div>
 				<div class="p-6">
-					<h2 class="text-xl font-bold">시험을 제출할까요?</h2>
-					<p class="mt-4 text-sm leading-6 text-[#6a7684]">
+					<h2 id="submit-dialog-title" class="text-xl font-bold">시험을 제출할까요?</h2>
+					<p id="submit-dialog-description" class="mt-4 text-sm leading-6 text-[#6a7684]">
 						제출 후에는 답안을 수정하거나 다시 응시할 수 없습니다.<br />미응답 문항:
 						<b>{attempt.questions.filter((item) => !values[item.id]?.trim()).length}개</b>
 					</p>
 					<div class="mt-7 flex justify-end gap-2">
-						<button class="btn-secondary" onclick={() => (confirm = false)}>계속 작성</button>
-						<button class="btn" onclick={() => submit()}>제출하기</button>
+						<button type="button" class="btn-secondary" onclick={() => (confirm = false)}
+							>계속 작성</button
+						>
+						<button type="button" class="btn" onclick={() => submit()}>제출하기</button>
 					</div>
 				</div>
-			</section>
+			</dialog>
 		</div>
 	{/if}
 {/if}
