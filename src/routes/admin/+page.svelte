@@ -211,6 +211,7 @@
 									</div>
 									<a
 										href="/admin/results"
+										data-sveltekit-reload
 										class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
 										>전체 결과</a
 									>
@@ -231,6 +232,7 @@
 													><td class="p-3">{attempt.objectiveScore}</td><td class="p-3"
 														><a
 															href={`/admin/results?attempt=${attempt.id}`}
+															data-sveltekit-reload
 															class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
 															>채점하기</a
 														></td
@@ -252,6 +254,7 @@
 									</div>
 									<a
 										href="/admin/codes"
+										data-sveltekit-reload
 										class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
 										>코드 관리</a
 									>
@@ -626,6 +629,7 @@
 									<div>
 										<a
 											href="/admin/results"
+											data-sveltekit-reload
 											class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
 											>← 응시자 목록</a
 										>
@@ -829,6 +833,7 @@
 											<td class="p-3">
 												{#if a.submittedAt}<a
 														href={`/admin/results?attempt=${a.id}`}
+														data-sveltekit-reload
 														class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
 														>답안 채점</a
 													>{/if}
