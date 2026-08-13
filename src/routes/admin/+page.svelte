@@ -531,11 +531,9 @@
 									<span class="text-xs text-stone-500">총 {data.questions?.length ?? 0}문항</span>
 								</div>
 								<div class="border-ink overflow-x-auto border-t">
-									<table class="w-full min-w-[820px] table-fixed text-left text-sm">
+									<table class="w-full min-w-[540px] table-fixed text-left text-sm">
 										<colgroup
-											><col class="w-14" /><col /><col class="w-28" /><col class="w-16" /><col
-												class="w-36"
-											/><col class="w-28" /></colgroup
+											><col class="w-12" /><col /><col class="w-32" /><col class="w-14" /></colgroup
 										>
 										<thead class="table-head">
 											<tr>
@@ -543,8 +541,6 @@
 												<th class="p-3">문제</th>
 												<th class="p-3">유형</th>
 												<th class="p-3">배점</th>
-												<th class="p-3">마지막 수정</th>
-												<th class="p-3"></th>
 											</tr>
 										</thead>
 										<tbody>
@@ -562,27 +558,8 @@
 																class="ml-2 text-[10px] font-semibold text-stone-500">비활성</span
 															>{/if}
 													</td>
-													<td class="p-3">{questionTypeLabel(q.type)}</td>
+													<td class="p-3 whitespace-nowrap">{questionTypeLabel(q.type)}</td>
 													<td class="p-3">{q.points}</td>
-													<td class="p-3"
-														><span
-															class="block truncate text-xs font-semibold"
-															title={q.updatedByName || '수정 이력 없음'}
-															>{q.updatedByName || '수정 이력 없음'}</span
-														>{#if q.updatedByName}<span class="text-muted mt-1 block text-[10px]"
-																>{q.updatedAt.toLocaleString('ko-KR')}</span
-															>{/if}</td
-													>
-													<td class="p-3">
-														<div class="flex items-center gap-3">
-															<a
-																href={`/admin/questions?question=${q.id}#question-detail`}
-																onclick={(event) => openQuestion(event, q)}
-																class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
-																>상세</a
-															>
-														</div>
-													</td>
 												</tr>
 											{/each}
 										</tbody>
