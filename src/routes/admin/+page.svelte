@@ -1,9 +1,27 @@
 <script lang="ts">
 	import QuestionEditor from '$lib/components/question-editor.svelte';
 
+	type ConflictQuestion = {
+		id: string;
+		type: string;
+		content: string;
+		options: string[] | null;
+		correctAnswer: number | null;
+		points: number;
+		updatedAt: Date;
+	};
+	type QuestionConflict = {
+		latest: ConflictQuestion;
+		draft: Omit<ConflictQuestion, 'id' | 'updatedAt'>;
+	};
+
 	let { data, form } = $props();
 	const tab = $derived(data.section);
 	let editingQuestion = $state(false);
+	const questionConflict = $derived(
+		((form as { conflict?: QuestionConflict } | null)?.conflict ?? null) as QuestionConflict | null
+	);
+	const hasQuestionConflict = $derived(Boolean(questionConflict));
 	const partialScore = (points: number) => Math.max(1, Math.round(points / 2));
 	const questionType = (type: string) =>
 		type === 'multiple' ? '객관식' : type === 'short' ? '단답형' : '서술·논술형';
@@ -216,12 +234,20 @@
 										>{/if}
 								</div>
 								<div class="flex items-center gap-3">
-									<button
-										type="button"
-										class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
-										onclick={() => (editingQuestion = !editingQuestion)}
-										>{editingQuestion ? '수정 취소' : '문제 수정'}</button
-									>
+									{#if questionConflict}
+										<a
+											href={`/admin/questions?question=${data.selectedQuestion.id}#question-detail`}
+											class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
+											>최신본으로 돌아가기</a
+										>
+									{:else}
+										<button
+											type="button"
+											class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
+											onclick={() => (editingQuestion = !editingQuestion)}
+											>{editingQuestion ? '수정 취소' : '문제 수정'}</button
+										>
+									{/if}
 									<a
 										href="/admin/questions"
 										class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
@@ -234,11 +260,47 @@
 									'수정 이력 없음'}{#if data.selectedQuestion.updatedByName}
 									· {data.selectedQuestion.updatedAt.toLocaleString('ko-KR')}{/if}
 							</p>
-							{#if editingQuestion}
+							{#if editingQuestion || hasQuestionConflict}
 								<div class="mt-5">
+									{#if questionConflict}
+										<div class="mb-5 border-l-2 border-amber-600 bg-amber-50 px-4 py-4">
+											<p class="text-sm font-bold text-amber-900">수정 충돌이 감지되었습니다</p>
+											<p class="mt-1 text-xs leading-5 text-amber-800">
+												아래 편집칸에는 내가 작성한 내용이 유지됩니다. 최신 저장본을 확인한 뒤
+												필요한 부분만 반영해 다시 저장하세요.
+											</p>
+											<div class="mt-4 grid gap-3 sm:grid-cols-2">
+												<div class="border border-amber-200 bg-white p-3">
+													<p class="text-[10px] font-bold tracking-wide text-amber-800">
+														최신 저장본
+													</p>
+													<p class="mt-2 text-xs text-[#6a7684]">
+														{questionType(questionConflict.latest.type)} · {questionConflict.latest
+															.points}점
+													</p>
+													<p class="mt-2 text-sm leading-6 whitespace-pre-wrap">
+														{questionConflict.latest.content}
+													</p>
+												</div>
+												<div class="border border-amber-200 bg-white p-3">
+													<p class="text-[10px] font-bold tracking-wide text-amber-800">
+														내가 작성한 내용
+													</p>
+													<p class="mt-2 text-xs text-[#6a7684]">
+														{questionType(questionConflict.draft.type)} · {questionConflict.draft
+															.points}점
+													</p>
+													<p class="mt-2 text-sm leading-6 whitespace-pre-wrap">
+														{questionConflict.draft.content}
+													</p>
+												</div>
+											</div>
+										</div>
+									{/if}
 									<QuestionEditor
 										action="?/updateQuestion"
-										question={data.selectedQuestion}
+										question={questionConflict?.latest ?? data.selectedQuestion}
+										draft={questionConflict?.draft ?? null}
 										submitLabel="수정 내용 저장"
 									/>
 								</div>

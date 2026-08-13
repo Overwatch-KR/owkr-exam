@@ -15,10 +15,16 @@
 	let {
 		action,
 		question = null,
+		draft = null,
 		submitLabel = '문제 등록'
-	}: { action: string; question?: QuestionDraft | null; submitLabel?: string } = $props();
+	}: {
+		action: string;
+		question?: QuestionDraft | null;
+		draft?: QuestionDraft | null;
+		submitLabel?: string;
+	} = $props();
 
-	const initialQuestion = untrack(() => question);
+	const initialQuestion = untrack(() => draft || question);
 	let type = $state<QuestionType>((initialQuestion?.type as QuestionType) || 'multiple');
 	let content = $state(initialQuestion?.content || '');
 	let points = $state(initialQuestion?.points || 1);

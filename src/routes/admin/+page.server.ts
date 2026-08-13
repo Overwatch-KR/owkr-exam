@@ -183,18 +183,16 @@ export const actions = {
 				message: '문제의 수정 정보를 확인할 수 없습니다. 목록에서 다시 열어 주세요.'
 			});
 		}
-		const [existing] = await database()
-			.select({ id: questions.id, updatedAt: questions.updatedAt })
-			.from(questions)
-			.where(eq(questions.id, id));
+		const db = database();
+		const [existing] = await db.select().from(questions).where(eq(questions.id, id));
 		if (!existing) return fail(404, { message: '수정할 문제를 찾지 못했습니다.' });
 		if (existing.updatedAt.getTime() !== revision.getTime()) {
 			return fail(409, {
-				message:
-					'다른 관리자가 이 문제를 먼저 수정했습니다. 최신 내용을 확인한 뒤 다시 수정해 주세요.'
+				message: '다른 관리자가 이 문제를 먼저 수정했습니다. 아래에서 두 내용을 비교해 주세요.',
+				conflict: { latest: existing, draft: parsed.value }
 			});
 		}
-		const updated = await database()
+		const updated = await db
 			.update(questions)
 			.set({
 				...parsed.value,
@@ -205,9 +203,10 @@ export const actions = {
 			.where(and(eq(questions.id, id), eq(questions.updatedAt, revision)))
 			.returning({ id: questions.id });
 		if (!updated.length) {
+			const [latest] = await db.select().from(questions).where(eq(questions.id, id));
 			return fail(409, {
-				message:
-					'다른 관리자가 이 문제를 먼저 수정했습니다. 최신 내용을 확인한 뒤 다시 수정해 주세요.'
+				message: '다른 관리자가 이 문제를 먼저 수정했습니다. 아래에서 두 내용을 비교해 주세요.',
+				conflict: latest ? { latest, draft: parsed.value } : undefined
 			});
 		}
 		return { success: '문제를 수정했습니다.' };
