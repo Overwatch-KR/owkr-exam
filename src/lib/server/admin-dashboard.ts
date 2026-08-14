@@ -4,6 +4,37 @@ import { database } from '$lib/server/db';
 
 export const adminSections = ['overview', 'questions', 'question-new', 'codes', 'results'] as const;
 export type AdminSection = (typeof adminSections)[number];
+const essayPassScore = 30;
+
+type ManualQuestionScore = {
+	id: string;
+	type: string;
+	points: number;
+};
+
+function manualScoreSummary(
+	questions: ManualQuestionScore[],
+	scoreByQuestionId: Map<string, number | null>,
+	type: 'short' | 'essay'
+) {
+	const matching = questions.filter((question) => question.type === type);
+	const graded =
+		matching.length > 0 &&
+		matching.every(
+			(question) =>
+				scoreByQuestionId.get(question.id) !== null && scoreByQuestionId.has(question.id)
+		);
+	return {
+		maxScore: matching.reduce((sum, question) => sum + question.points, 0),
+		score: graded
+			? matching.reduce((sum, question) => sum + (scoreByQuestionId.get(question.id) ?? 0), 0)
+			: null,
+		gradedCount: matching.filter(
+			(question) =>
+				scoreByQuestionId.get(question.id) !== null && scoreByQuestionId.has(question.id)
+		).length
+	};
+}
 
 export async function loadAdminSection(section: AdminSection, url: URL) {
 	const db = database();
@@ -47,6 +78,44 @@ export async function loadAdminSection(section: AdminSection, url: URL) {
 	}
 
 	const allAttempts = await db.select().from(attempts).orderBy(desc(attempts.startedAt));
+	const scoreRows = allAttempts.length
+		? await db
+				.select({
+					id: examQuestions.id,
+					attemptId: examQuestions.attemptId,
+					type: examQuestions.type,
+					points: examQuestions.points,
+					score: answers.score
+				})
+				.from(examQuestions)
+				.leftJoin(answers, eq(answers.attemptQuestionId, examQuestions.id))
+				.where(
+					inArray(
+						examQuestions.attemptId,
+						allAttempts.map((attempt) => attempt.id)
+					)
+				)
+		: [];
+	const scoreByQuestionId = new Map(scoreRows.map((question) => [question.id, question.score]));
+	const questionsByAttemptId = new Map<string, ManualQuestionScore[]>();
+	for (const question of scoreRows) {
+		const existing = questionsByAttemptId.get(question.attemptId) ?? [];
+		existing.push(question);
+		questionsByAttemptId.set(question.attemptId, existing);
+	}
+	const attemptsWithScores = allAttempts.map((attempt) => {
+		const attemptQuestions = questionsByAttemptId.get(attempt.id) ?? [];
+		const short = manualScoreSummary(attemptQuestions, scoreByQuestionId, 'short');
+		const essay = manualScoreSummary(attemptQuestions, scoreByQuestionId, 'essay');
+		return {
+			...attempt,
+			shortScore: short.score,
+			shortMaxScore: short.maxScore,
+			essayScore: essay.score,
+			essayMaxScore: essay.maxScore,
+			essayPassed: essay.score === null ? null : essay.score >= essayPassScore
+		};
+	});
 	const selectedAttemptId = url.searchParams.get('attempt');
 	const gradingAttempt = selectedAttemptId
 		? allAttempts.find((attempt) => attempt.id === selectedAttemptId) || null
@@ -75,15 +144,21 @@ export async function loadAdminSection(section: AdminSection, url: URL) {
 		);
 		const subjectiveQuestions = snapshot.filter((question) => question.type !== 'multiple');
 		const objectiveQuestions = snapshot.filter((question) => question.type === 'multiple');
+		const gradingScoreByQuestionId = new Map(
+			submittedAnswers.map((answer) => [answer.attemptQuestionId, answer.score])
+		);
+		const short = manualScoreSummary(subjectiveQuestions, gradingScoreByQuestionId, 'short');
+		const essay = manualScoreSummary(subjectiveQuestions, gradingScoreByQuestionId, 'essay');
 		grading = {
 			attempt: gradingAttempt,
 			objectiveMaxScore: objectiveQuestions.reduce((sum, question) => sum + question.points, 0),
-			subjectiveMaxScore: subjectiveQuestions.reduce((sum, question) => sum + question.points, 0),
-			gradedCount: subjectiveQuestions.filter(
-				(question) =>
-					answerByQuestionId.get(question.id)?.score !== null &&
-					answerByQuestionId.get(question.id)?.score !== undefined
-			).length,
+			shortScore: short.score,
+			shortMaxScore: short.maxScore,
+			essayScore: essay.score,
+			essayMaxScore: essay.maxScore,
+			essayPassScore,
+			essayPassed: essay.score === null ? null : essay.score >= essayPassScore,
+			gradedCount: short.gradedCount + essay.gradedCount,
 			questions: subjectiveQuestions.map((question) => ({
 				...question,
 				answer: answerByQuestionId.get(question.id)?.value || '',
@@ -96,5 +171,5 @@ export async function loadAdminSection(section: AdminSection, url: URL) {
 		};
 	}
 
-	return { section, attempts: allAttempts, grading };
+	return { section, attempts: attemptsWithScores, grading };
 }
