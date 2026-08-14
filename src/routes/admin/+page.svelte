@@ -14,10 +14,11 @@
 		correctAnswer: number | null;
 		points: number;
 		updatedAt: Date;
+		revision: number;
 	};
 	type QuestionConflict = {
 		latest: ConflictQuestion;
-		draft: Omit<ConflictQuestion, 'id' | 'updatedAt'>;
+		draft: Omit<ConflictQuestion, 'id' | 'updatedAt' | 'revision'>;
 	};
 	type AdminForm = {
 		message?: string;
@@ -33,13 +34,12 @@
 	const activeSection = $derived(tab);
 	let editingQuestion = $state(false);
 	let deleteQuestionOpen = $state(false);
-	let dismissedConflictRevision = $state<string | null>(null);
+	let dismissedConflictRevision = $state<number | null>(null);
 	let conflictForEditing = $state<QuestionConflict | null>(null);
 	const actionForm = $derived((form ?? {}) as AdminForm);
 	const questionConflict = $derived((actionForm.conflict ?? null) as QuestionConflict | null);
 	const activeQuestionConflict = $derived(
-		questionConflict &&
-			questionConflict.latest.updatedAt.toISOString() !== dismissedConflictRevision
+		questionConflict && questionConflict.latest.revision !== dismissedConflictRevision
 			? questionConflict
 			: null
 	);
@@ -91,7 +91,7 @@
 
 	function continueEditingConflict(conflict: QuestionConflict) {
 		conflictForEditing = conflict;
-		dismissedConflictRevision = conflict.latest.updatedAt.toISOString();
+		dismissedConflictRevision = conflict.latest.revision;
 		editingQuestion = true;
 	}
 
@@ -102,7 +102,7 @@
 			selectedQuestion: { ...data.selectedQuestion, ...conflict.latest }
 		} as typeof initialData;
 		conflictForEditing = null;
-		dismissedConflictRevision = conflict.latest.updatedAt.toISOString();
+		dismissedConflictRevision = conflict.latest.revision;
 		editingQuestion = false;
 	}
 

@@ -90,47 +90,57 @@ export const actions = {
 		const editor = admin(event);
 		const data = await event.request.formData();
 		const id = String(data.get('id'));
-		const revision = new Date(String(data.get('revision') || ''));
+		const revision = Number(data.get('revision'));
 		const parsed = questionInput(data);
 		if ('error' in parsed) return fail(400, { message: parsed.error });
-		if (Number.isNaN(revision.getTime())) {
+		if (!Number.isSafeInteger(revision) || revision < 1) {
 			return fail(400, {
 				message: '문제의 수정 정보를 확인할 수 없습니다. 목록에서 다시 열어 주세요.'
 			});
 		}
-		const db = database();
-		const [existing] = await db.select().from(questions).where(eq(questions.id, id));
-		if (!existing) return fail(404, { message: '수정할 문제를 찾지 못했습니다.' });
-		if (existing.updatedAt.getTime() !== revision.getTime()) {
-			return fail(409, {
-				message: '다른 관리자가 이 문제를 먼저 수정했습니다. 아래에서 두 내용을 비교해 주세요.',
-				conflict: { latest: existing, draft: parsed.value }
+		try {
+			const db = database();
+			const [existing] = await db.select().from(questions).where(eq(questions.id, id));
+			if (!existing) return fail(404, { message: '수정할 문제를 찾지 못했습니다.' });
+			if (existing.revision !== revision) {
+				return fail(409, {
+					message: '다른 관리자가 이 문제를 먼저 수정했습니다. 아래에서 두 내용을 비교해 주세요.',
+					conflict: { latest: existing, draft: parsed.value }
+				});
+			}
+			const updated = await db
+				.update(questions)
+				.set({
+					...parsed.value,
+					updatedAt: new Date(),
+					revision: sql`${questions.revision} + 1`,
+					updatedById: editor.id,
+					updatedByName: editor.displayName
+				})
+				.where(and(eq(questions.id, id), eq(questions.revision, revision)))
+				.returning({ id: questions.id });
+			if (!updated.length) {
+				const [latest] = await db.select().from(questions).where(eq(questions.id, id));
+				return fail(409, {
+					message: '다른 관리자가 이 문제를 먼저 수정했습니다. 아래에서 두 내용을 비교해 주세요.',
+					conflict: latest ? { latest, draft: parsed.value } : undefined
+				});
+			}
+			invalidateExamConfig();
+			return { success: '문제를 수정했습니다.' };
+		} catch (cause) {
+			const errorId = crypto.randomUUID();
+			console.error('[admin:updateQuestion] failed', {
+				errorId,
+				questionId: id,
+				revision,
+				editorId: editor.id,
+				error: cause instanceof Error ? cause.message : String(cause)
+			});
+			return fail(500, {
+				message: `문제 수정 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요. (오류 코드: ${errorId})`
 			});
 		}
-		const updated = await db
-			.update(questions)
-			.set({
-				...parsed.value,
-				updatedAt: new Date(),
-				updatedById: editor.id,
-				updatedByName: editor.displayName
-			})
-			.where(
-				and(
-					eq(questions.id, id),
-					sql`date_trunc('milliseconds', ${questions.updatedAt}) = ${revision}`
-				)
-			)
-			.returning({ id: questions.id });
-		if (!updated.length) {
-			const [latest] = await db.select().from(questions).where(eq(questions.id, id));
-			return fail(409, {
-				message: '다른 관리자가 이 문제를 먼저 수정했습니다. 아래에서 두 내용을 비교해 주세요.',
-				conflict: latest ? { latest, draft: parsed.value } : undefined
-			});
-		}
-		invalidateExamConfig();
-		return { success: '문제를 수정했습니다.' };
 	},
 	grade: async (event) => {
 		admin(event);

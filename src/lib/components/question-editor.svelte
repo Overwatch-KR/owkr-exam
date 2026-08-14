@@ -10,6 +10,7 @@
 		correctAnswer: number | null;
 		points: number;
 		updatedAt?: Date;
+		revision?: number;
 	};
 
 	let {
@@ -59,8 +60,8 @@
 
 <form method="POST" {action} class="border-ink border-t-2 bg-white px-5 pt-5 pb-6 sm:px-6">
 	{#if question?.id}<input type="hidden" name="id" value={question.id} />{/if}
-	{#if question?.updatedAt}
-		<input type="hidden" name="revision" value={question.updatedAt.toISOString()} />
+	{#if question?.revision}
+		<input type="hidden" name="revision" value={question.revision} />
 	{/if}
 
 	<fieldset>

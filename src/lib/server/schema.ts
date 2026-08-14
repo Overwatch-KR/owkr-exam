@@ -22,6 +22,7 @@ export const questions = pgTable('questions', {
 	active: boolean('active').notNull().default(true),
 	createdAt: timestamp('created_at').notNull().defaultNow(),
 	updatedAt: timestamp('updated_at').notNull().defaultNow(),
+	revision: integer('revision').notNull().default(1),
 	updatedById: text('updated_by_id'),
 	updatedByName: text('updated_by_name')
 });
