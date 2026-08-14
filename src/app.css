@@ -158,6 +158,65 @@
 		@apply border-line border-b;
 		background-color: var(--app-surface);
 	}
+
+	.objective-answer-correct {
+		border-color: #087ba8;
+		background-color: #effbff;
+	}
+
+	.objective-answer-correct .objective-answer-title {
+		color: #087ba8;
+	}
+
+	.objective-answer-incorrect {
+		border-color: #d92d20;
+		background-color: #fff1f0;
+	}
+
+	.objective-answer-incorrect .objective-answer-title {
+		color: #b42318;
+	}
+
+	.objective-answer-text {
+		color: var(--app-body);
+	}
+
+	.objective-answer-badge {
+		@apply inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold;
+		background-color: rgb(255 255 255 / 72%);
+	}
+
+	.objective-answer-correct .objective-answer-badge {
+		color: #087ba8;
+	}
+
+	.objective-answer-incorrect .objective-answer-badge {
+		color: #b42318;
+	}
+
+	:root.dark .objective-answer-correct {
+		border-color: #45b2dc;
+		background-color: #153341;
+	}
+
+	:root.dark .objective-answer-correct .objective-answer-title,
+	:root.dark .objective-answer-correct .objective-answer-badge {
+		color: #72c7e7;
+	}
+
+	:root.dark .objective-answer-incorrect {
+		border-color: #f87171;
+		background-color: #3a1c20;
+	}
+
+	:root.dark .objective-answer-incorrect .objective-answer-title,
+	:root.dark .objective-answer-incorrect .objective-answer-badge {
+		color: #fca5a5;
+	}
+
+	:root.dark .objective-answer-badge {
+		background-color: rgb(13 17 23 / 48%);
+	}
 }
 
 /* 기존 화면의 중립색을 의미 기반 다크 팔레트로 연결한다. */

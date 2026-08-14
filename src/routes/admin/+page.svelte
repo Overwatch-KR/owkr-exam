@@ -91,6 +91,18 @@
 		const choice = Number(value);
 		return Number.isInteger(choice) ? [choice] : [];
 	}
+	function isObjectiveAnswerCorrect(
+		question: { correctAnswer: number | null; correctAnswers?: number[] | null },
+		value: string
+	) {
+		const selected = [...new Set(answerOptionIndices(value))].sort((a, b) => a - b);
+		const correct = [...new Set(correctOptionIndices(question))].sort((a, b) => a - b);
+		return (
+			selected.length > 0 &&
+			selected.length === correct.length &&
+			selected.every((answer, index) => answer === correct[index])
+		);
+	}
 
 	$effect(() => {
 		if (actionForm.conflict) return;
@@ -821,7 +833,7 @@
 									<section class="mt-6">
 										<div class="flex items-baseline justify-between gap-3">
 											<h3 class="text-base font-bold">객관식 응답</h3>
-											<p class="text-xs text-[#6a7684]">응시자가 실제로 선택한 보기입니다.</p>
+											<p class="text-xs text-[#6a7684]">파란색은 정답, 빨간색은 오답입니다.</p>
 										</div>
 										<div class="mt-3 grid gap-3 lg:grid-cols-2">
 											{#each data.grading.objectiveQuestions as q}
@@ -836,14 +848,26 @@
 														{q.content}
 													</p>
 													{#if q.answer !== '' && answerOptionIndices(q.answer).length}
-														<div class="mt-3 border-l-2 border-[#087ba8] bg-[#effbff] px-3 py-2">
-															<p class="text-xs font-bold text-[#087ba8]">
-																{answerOptionIndices(q.answer)
-																	.map((answer) => answer + 1)
-																	.join(', ')}번 선택
-															</p>
+														<div
+															class="mt-3 border-l-2 px-3 py-2"
+															class:objective-answer-correct={isObjectiveAnswerCorrect(q, q.answer)}
+															class:objective-answer-incorrect={!isObjectiveAnswerCorrect(
+																q,
+																q.answer
+															)}
+														>
+															<div class="flex items-center justify-between gap-3">
+																<p class="objective-answer-title text-xs font-bold">
+																	{answerOptionIndices(q.answer)
+																		.map((answer) => answer + 1)
+																		.join(', ')}번 선택
+																</p>
+																<span class="objective-answer-badge">
+																	{isObjectiveAnswerCorrect(q, q.answer) ? '정답' : '오답'}
+																</span>
+															</div>
 															{#each answerOptionIndices(q.answer) as answer}
-																<p class="mt-1 text-sm leading-5 text-[#34404d]">
+																<p class="objective-answer-text mt-1 text-sm leading-5">
 																	{q.options?.[answer]}
 																</p>
 															{/each}
