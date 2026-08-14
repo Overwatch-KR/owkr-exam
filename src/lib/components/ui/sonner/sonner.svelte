@@ -6,13 +6,25 @@
 		LoaderCircleIcon,
 		TriangleAlertIcon
 	} from '@lucide/svelte';
+	import { onMount } from 'svelte';
 	import { Toaster as Sonner, type ToasterProps } from 'svelte-sonner';
 
 	let { ...restProps }: ToasterProps = $props();
+	let theme = $state<'light' | 'dark'>('light');
+
+	onMount(() => {
+		const root = document.documentElement;
+		const updateTheme = () => (theme = root.classList.contains('dark') ? 'dark' : 'light');
+		const observer = new MutationObserver(updateTheme);
+
+		updateTheme();
+		observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+		return () => observer.disconnect();
+	});
 </script>
 
 <Sonner
-	theme="light"
+	{theme}
 	position="top-center"
 	closeButton
 	expand

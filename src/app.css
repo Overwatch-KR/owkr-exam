@@ -1,16 +1,52 @@
 @import 'tailwindcss';
 
-@theme {
-	--color-ink: #111820;
-	--color-muted: #6a7684;
-	--color-paper: #f7f8fa;
-	--color-line: #dfe4e9;
-	--color-navy: #087ba8;
-	--color-sky: #eaf7fb;
-	--color-accent: #087ba8;
+@theme inline {
+	--color-ink: var(--app-ink);
+	--color-muted: var(--app-muted);
+	--color-paper: var(--app-paper);
+	--color-line: var(--app-line);
+	--color-navy: var(--app-accent);
+	--color-sky: var(--app-accent-soft);
+	--color-accent: var(--app-accent);
 }
 
 @layer base {
+	:root {
+		color-scheme: light;
+		--app-canvas: #f5f6f8;
+		--app-paper: #f7f8fa;
+		--app-surface: #ffffff;
+		--app-surface-muted: #f0f3f6;
+		--app-ink: #111820;
+		--app-body: #34404d;
+		--app-muted: #6a7684;
+		--app-line: #dfe4e9;
+		--app-line-strong: #c8d0d9;
+		--app-accent: #087ba8;
+		--app-accent-fill: #087ba8;
+		--app-accent-fill-hover: #005f84;
+		--app-accent-soft: #eaf7fb;
+		--app-accent-border: #b7dce9;
+	}
+
+	:root.dark {
+		color-scheme: dark;
+		--app-canvas: #0d1117;
+		--app-paper: #10151b;
+		--app-surface: #171d24;
+		--app-surface-muted: #1d252e;
+		--app-ink: #eef3f7;
+		--app-body: #c8d1da;
+		--app-muted: #929eab;
+		--app-line: #2d3742;
+		--app-line-strong: #3c4855;
+		--app-accent: #45b2dc;
+		--app-accent-fill: #087ba8;
+		--app-accent-fill-hover: #0a6c91;
+		--app-accent-soft: #153341;
+		--app-accent-border: #285b70;
+	}
+
 	* {
 		box-sizing: border-box;
 	}
@@ -22,6 +58,9 @@
 
 	body {
 		@apply bg-paper text-ink antialiased;
+		transition:
+			background-color 160ms ease,
+			color 160ms ease;
 		font-family:
 			Pretendard, 'Pretendard Variable', 'Noto Sans KR', 'Apple SD Gothic Neo', Inter, system-ui,
 			sans-serif;
@@ -34,7 +73,14 @@
 	input,
 	textarea,
 	select {
-		@apply border-line focus:border-navy focus:ring-sky rounded-md border bg-white px-3 py-2.5 text-sm transition outline-none focus:ring-2;
+		@apply border-line focus:border-navy focus:ring-sky rounded-md border px-3 py-2.5 text-sm transition outline-none focus:ring-2;
+		background-color: var(--app-surface);
+		color: var(--app-ink);
+	}
+
+	input::placeholder,
+	textarea::placeholder {
+		color: var(--app-muted);
 	}
 
 	textarea {
@@ -48,42 +94,137 @@
 	}
 
 	.wordmark-mark {
-		@apply bg-navy mr-2 inline-flex h-5 w-5 items-center justify-center rounded-sm text-[10px] font-black tracking-normal text-white;
+		@apply mr-2 inline-flex h-5 w-5 items-center justify-center rounded-sm text-[10px] font-black tracking-normal text-white;
+		background-color: var(--app-accent-fill);
 	}
 
 	.card {
-		@apply border-line rounded-md border bg-white;
+		@apply border-line rounded-md border;
+		background-color: var(--app-surface);
 	}
 
 	.btn {
-		@apply bg-navy inline-flex items-center justify-center rounded-md px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#005f84] disabled:cursor-not-allowed disabled:opacity-50;
+		@apply inline-flex items-center justify-center rounded-md px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50;
+		background-color: var(--app-accent-fill);
+	}
+
+	.btn:hover {
+		background-color: var(--app-accent-fill-hover);
 	}
 
 	.btn-secondary {
-		@apply text-ink inline-flex items-center justify-center rounded-md border border-[#c8d0d9] bg-white px-4 py-2.5 text-sm font-semibold transition hover:bg-[#f2f5f7] disabled:cursor-not-allowed disabled:opacity-50;
+		@apply text-ink inline-flex items-center justify-center rounded-md border px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
+		border-color: var(--app-line-strong);
+		background-color: var(--app-surface);
+	}
+
+	.btn-secondary:hover {
+		background-color: var(--app-surface-muted);
 	}
 
 	.label {
-		@apply mb-1.5 block text-xs font-semibold text-[#34404d];
+		@apply mb-1.5 block text-xs font-semibold;
+		color: var(--app-body);
 	}
 
 	.badge {
-		@apply inline-flex items-center rounded-full border border-[#b7dce9] bg-[#effbff] px-2 py-1 text-[11px] font-semibold text-[#087ba8];
+		@apply inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-semibold;
+		border-color: var(--app-accent-border);
+		background-color: var(--app-accent-soft);
+		color: var(--app-accent);
 	}
 
 	.eyebrow {
-		@apply text-[11px] font-semibold tracking-[0.1em] text-[#087ba8];
+		@apply text-[11px] font-semibold tracking-[0.1em];
+		color: var(--app-accent);
 	}
 
 	.table-head {
-		@apply border-y border-[#c8d0d9] bg-[#f0f3f6] text-left text-[11px] font-semibold tracking-wide text-[#6a7684];
+		@apply border-y text-left text-[11px] font-semibold tracking-wide;
+		border-color: var(--app-line-strong);
+		background-color: var(--app-surface-muted);
+		color: var(--app-muted);
 	}
 
 	.notice-error {
 		@apply border-l-2 border-red-700 bg-red-50 px-3 py-2 text-sm leading-6 font-semibold text-red-800;
 	}
 
+	:root.dark .notice-error {
+		@apply border-red-500 bg-red-950/50 text-red-200;
+	}
+
 	.site-header {
-		@apply border-line border-b bg-white;
+		@apply border-line border-b;
+		background-color: var(--app-surface);
+	}
+}
+
+/* 기존 화면의 중립색을 의미 기반 다크 팔레트로 연결한다. */
+@layer utilities {
+	.dark .bg-white,
+	.dark .bg-white\/95 {
+		background-color: var(--app-surface) !important;
+	}
+
+	.dark .bg-\[\#f0f3f6\],
+	.dark .bg-\[\#f3f5f7\],
+	.dark .bg-\[\#f5f6f8\],
+	.dark .bg-\[\#f7f8fa\],
+	.dark .bg-\[\#f8fafb\] {
+		background-color: var(--app-paper) !important;
+	}
+
+	.dark .bg-\[\#eaf7fb\],
+	.dark .bg-\[\#effbff\] {
+		background-color: var(--app-accent-soft) !important;
+	}
+
+	.dark .text-\[\#111820\],
+	.dark .text-\[\#24333f\] {
+		color: var(--app-ink) !important;
+	}
+
+	.dark .text-\[\#34404d\],
+	.dark .text-\[\#52616e\],
+	.dark .text-stone-600,
+	.dark .text-stone-700 {
+		color: var(--app-body) !important;
+	}
+
+	.dark .text-\[\#667788\],
+	.dark .text-\[\#6a7684\],
+	.dark .text-stone-500 {
+		color: var(--app-muted) !important;
+	}
+
+	.dark .text-\[\#087ba8\],
+	.dark .hover\:text-\[\#087ba8\]:hover {
+		color: var(--app-accent) !important;
+	}
+
+	.dark .border-\[\#c8d0d9\],
+	.dark .border-\[\#cfd8df\],
+	.dark .border-\[\#d5dce2\],
+	.dark .border-\[\#d8e0e8\],
+	.dark .border-\[\#d9dee5\],
+	.dark .border-\[\#dfe4e9\],
+	.dark .border-\[\#e2e7ec\] {
+		border-color: var(--app-line) !important;
+	}
+
+	.dark .border-\[\#b7dce9\],
+	.dark .border-\[\#b8d8e5\],
+	.dark .border-\[\#bfd4df\] {
+		border-color: var(--app-accent-border) !important;
+	}
+
+	.dark .bg-\[\#087ba8\] {
+		background-color: var(--app-accent-fill) !important;
+	}
+
+	.dark .hover\:bg-\[\#f2f5f7\]:hover,
+	.dark .hover\:bg-\[\#f5fbfd\]:hover {
+		background-color: var(--app-surface-muted) !important;
 	}
 }

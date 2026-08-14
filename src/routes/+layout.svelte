@@ -3,6 +3,7 @@
 	import { afterNavigate, beforeNavigate } from '$app/navigation';
 	import { page, updated } from '$app/state';
 	import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
+	import ThemeToggle from '$lib/components/theme-toggle.svelte';
 	import { Toaster } from '$lib/components/ui/sonner';
 	import '../app.css';
 
@@ -38,6 +39,7 @@
 </svelte:head>
 <QueryClientProvider client={queryClient}>
 	<Toaster />
+	<ThemeToggle />
 	{@render children()}
 </QueryClientProvider>
 {#if updateAvailable}
