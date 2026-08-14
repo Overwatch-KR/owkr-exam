@@ -722,6 +722,41 @@
 									/{data.grading.questions.length}문항 채점됨 · 모든 주관식 문항의 점수가 입력되면
 									주관식 점수와 총점이 자동 확정됩니다.
 								</p>
+								{#if data.grading.objectiveQuestions.length}
+									<section class="mt-6">
+										<div class="flex items-baseline justify-between gap-3">
+											<h3 class="text-base font-bold">객관식 응답</h3>
+											<p class="text-xs text-[#6a7684]">응시자가 실제로 선택한 보기입니다.</p>
+										</div>
+										<div class="mt-3 grid gap-3 lg:grid-cols-2">
+											{#each data.grading.objectiveQuestions as q}
+												<article class="border border-[#dfe4e9] bg-white p-4">
+													<div class="flex items-center justify-between gap-3">
+														<p class="font-mono text-xs font-bold text-[#087ba8]">
+															문제 {q.sortOrder}
+														</p>
+														<p class="text-xs text-[#6a7684]">배점 {q.points}점</p>
+													</div>
+													<p class="mt-3 line-clamp-2 text-sm leading-6 font-semibold">
+														{q.content}
+													</p>
+													{#if q.answer !== '' && q.options?.[Number(q.answer)]}
+														<div class="mt-3 border-l-2 border-[#087ba8] bg-[#effbff] px-3 py-2">
+															<p class="text-xs font-bold text-[#087ba8]">
+																{Number(q.answer) + 1}번 선택
+															</p>
+															<p class="mt-1 text-sm leading-5 text-[#34404d]">
+																{q.options[Number(q.answer)]}
+															</p>
+														</div>
+													{:else}
+														<p class="mt-3 text-sm text-[#6a7684]">(미응답)</p>
+													{/if}
+												</article>
+											{/each}
+										</div>
+									</section>
+								{/if}
 
 								<div class="mt-6 space-y-4">
 									{#each data.grading.questions as q, index}
@@ -857,7 +892,17 @@
 								<tbody>
 									{#each data.attempts ?? [] as a}
 										<tr class="border-line border-b">
-											<td class="p-3 font-semibold">{a.displayName}</td>
+											<td class="p-3 font-semibold">
+												{#if a.submittedAt}
+													<a
+														href={`/admin/results?attempt=${a.id}`}
+														data-sveltekit-reload
+														class="text-[#087ba8] underline underline-offset-4">{a.displayName}</a
+													>
+												{:else}
+													{a.displayName}
+												{/if}
+											</td>
 											<td class="p-3 font-mono text-xs">{a.discordId}</td>
 											<td class="p-3"
 												><span class="badge"
@@ -886,7 +931,7 @@
 														href={`/admin/results?attempt=${a.id}`}
 														data-sveltekit-reload
 														class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
-														>답안 채점</a
+														>답안 보기</a
 													>{/if}
 												<form
 													method="POST"

@@ -74,11 +74,10 @@ export async function loadAdminSection(section: AdminSection, url: URL) {
 			submittedAnswers.map((answer) => [answer.attemptQuestionId, answer])
 		);
 		const subjectiveQuestions = snapshot.filter((question) => question.type !== 'multiple');
+		const objectiveQuestions = snapshot.filter((question) => question.type === 'multiple');
 		grading = {
 			attempt: gradingAttempt,
-			objectiveMaxScore: snapshot
-				.filter((question) => question.type === 'multiple')
-				.reduce((sum, question) => sum + question.points, 0),
+			objectiveMaxScore: objectiveQuestions.reduce((sum, question) => sum + question.points, 0),
 			subjectiveMaxScore: subjectiveQuestions.reduce((sum, question) => sum + question.points, 0),
 			gradedCount: subjectiveQuestions.filter(
 				(question) =>
@@ -89,6 +88,10 @@ export async function loadAdminSection(section: AdminSection, url: URL) {
 				...question,
 				answer: answerByQuestionId.get(question.id)?.value || '',
 				score: answerByQuestionId.get(question.id)?.score ?? null
+			})),
+			objectiveQuestions: objectiveQuestions.map((question) => ({
+				...question,
+				answer: answerByQuestionId.get(question.id)?.value || ''
 			}))
 		};
 	}
