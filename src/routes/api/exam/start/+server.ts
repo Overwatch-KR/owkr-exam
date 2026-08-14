@@ -7,6 +7,27 @@ import { database } from '$lib/server/db';
 import { attempts, examCodes, examQuestions, questions, answers } from '$lib/server/schema';
 import { user } from '$lib/server/guard';
 
+function shuffle<T>(items: T[]) {
+	const shuffled = [...items];
+	for (let index = shuffled.length - 1; index > 0; index -= 1) {
+		const swapIndex = Math.floor(Math.random() * (index + 1));
+		[shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+	}
+	return shuffled;
+}
+
+function randomizedQuestionOrder<T extends { type: string; sortOrder: number }>(questions: T[]) {
+	// 운영 규칙: 35번 논술형은 항상 마지막에 둔다.
+	const fixedLast = questions.find(
+		(question) => question.type === 'essay' && question.sortOrder === 35
+	);
+	const movable = fixedLast ? questions.filter((question) => question !== fixedLast) : questions;
+	const byType = ['multiple', 'short', 'essay'].flatMap((type) =>
+		shuffle(movable.filter((question) => question.type === type))
+	);
+	return fixedLast ? [...byType, fixedLast] : byType;
+}
+
 export const POST = async (e) => {
 	const u = user(e);
 	const requestStartedAt = performance.now();
@@ -54,8 +75,9 @@ export const POST = async (e) => {
 						if (!sourceQuestions.length) {
 							throw new ExamRequestError(400, '등록된 활성 문제가 없습니다.');
 						}
+						const orderedQuestions = randomizedQuestionOrder(sourceQuestions);
 						await tx.insert(examQuestions).values(
-							sourceQuestions.map((question, index) => ({
+							orderedQuestions.map((question, index) => ({
 								attemptId: attempt.id,
 								sourceQuestionId: question.id,
 								type: question.type,
