@@ -6,6 +6,7 @@ export const examQuestionSchema = z.object({
 	type: z.enum(['multiple', 'short', 'essay']),
 	content: z.string(),
 	options: z.array(z.string()),
+	allowsMultipleAnswers: z.boolean(),
 	points: z.number().positive(),
 	answer: z.string()
 });

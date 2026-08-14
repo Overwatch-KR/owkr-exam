@@ -128,8 +128,27 @@
 
 	function selectChoice(optionIndex: number) {
 		if (!q || q.type !== 'multiple' || optionIndex >= q.options.length) return;
-		values[q.id] = String(optionIndex);
+		if (q.allowsMultipleAnswers) {
+			const selected = selectedChoiceIndices(values[q.id]);
+			const next = selected.includes(optionIndex)
+				? selected.filter((item) => item !== optionIndex)
+				: [...selected, optionIndex].sort((a, b) => a - b);
+			values[q.id] = next.length ? JSON.stringify(next) : '';
+		} else {
+			values[q.id] = String(optionIndex);
+		}
 		save(q.id);
+	}
+
+	function selectedChoiceIndices(value: string | undefined) {
+		try {
+			const parsed = JSON.parse(value || '');
+			if (Array.isArray(parsed)) return parsed.filter(Number.isInteger);
+		} catch {
+			// 단일정답은 숫자 문자열로 저장됩니다.
+		}
+		const choice = Number(value);
+		return Number.isInteger(choice) ? [choice] : [];
 	}
 
 	async function submit(timeout = false) {
@@ -333,7 +352,7 @@
 						연한 파랑: 답변 완료<br />진한 파랑: 현재 문제
 					</p>
 					<p class="mt-3 text-[11px] leading-5 text-[#52616e]">
-						Shift + Enter: 다음 문제<br />1–5: 객관식 선택
+						Shift + Enter: 다음 문제<br />1–5: 객관식 선택{q?.allowsMultipleAnswers ? '/해제' : ''}
 					</p>
 					<button type="button" class="btn mt-5 w-full" onclick={() => (confirm = true)}
 						>시험 제출</button
@@ -359,17 +378,22 @@
 								{#each q.options as option, i}<label
 										class="flex cursor-pointer gap-4 border-b border-[#dfe4e9] bg-white px-5 py-4 last:border-0 hover:bg-[#f5fbfd]"
 										><input
-											type="radio"
+											type={q.allowsMultipleAnswers ? 'checkbox' : 'radio'}
 											name={q.id}
 											value={String(i)}
-											bind:group={values[q.id]}
-											onchange={() => save(q.id)}
+											checked={selectedChoiceIndices(values[q.id]).includes(i)}
+											onchange={() => selectChoice(i)}
 											class="mt-0.5"
 										/><span class="text-sm leading-6"
 											><b class="mr-2 text-[#087ba8]">{i + 1}.</b>{option}</span
 										></label
 									>{/each}
 							</div>
+							{#if q.allowsMultipleAnswers}
+								<p class="mt-3 text-xs text-[#6a7684]">
+									복수 선택 문제입니다. 해당하는 보기를 모두 선택하세요.
+								</p>
+							{/if}
 						{:else}<textarea
 								aria-label={`${index + 1}번 문제 답안`}
 								class="mt-8 min-h-52 w-full leading-7"

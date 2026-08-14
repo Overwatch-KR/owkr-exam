@@ -18,7 +18,11 @@ function questionInput(data: FormData) {
 		.getAll('option')
 		.map((item) => String(item).trim())
 		.filter(Boolean);
-	const correctAnswer = Number(data.get('correct'));
+	const correctAnswers = data
+		.getAll('correct')
+		.map((item) => Number(item))
+		.filter((item, index, items) => Number.isInteger(item) && items.indexOf(item) === index)
+		.sort((a, b) => a - b);
 	if (
 		!['multiple', 'short', 'essay'].includes(type) ||
 		!content ||
@@ -30,9 +34,8 @@ function questionInput(data: FormData) {
 	if (
 		type === 'multiple' &&
 		(options.length < 2 ||
-			!Number.isInteger(correctAnswer) ||
-			correctAnswer < 0 ||
-			correctAnswer >= options.length)
+			!correctAnswers.length ||
+			correctAnswers.some((answer) => answer < 0 || answer >= options.length))
 	) {
 		return { error: '객관식 보기를 두 개 이상 입력하고 정답을 선택해 주세요.' } as const;
 	}
@@ -42,7 +45,8 @@ function questionInput(data: FormData) {
 			content,
 			points,
 			options: type === 'multiple' ? options : null,
-			correctAnswer: type === 'multiple' ? correctAnswer : null
+			correctAnswer: type === 'multiple' ? correctAnswers[0] : null,
+			correctAnswers: type === 'multiple' ? correctAnswers : null
 		}
 	} as const;
 }

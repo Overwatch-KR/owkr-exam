@@ -2,6 +2,31 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { answers, attempts, examCodes, examQuestions } from './schema';
 import { database } from './db';
 
+function answerIndices(value: string) {
+	try {
+		const parsed = JSON.parse(value);
+		if (Array.isArray(parsed)) {
+			return [...new Set(parsed.filter(Number.isInteger))].sort((a, b) => a - b);
+		}
+	} catch {
+		// 기존 단일정답 값은 숫자 문자열로 저장되어 있습니다.
+	}
+	const index = Number(value);
+	return Number.isInteger(index) ? [index] : [];
+}
+
+function isCorrectMultipleAnswer(value: string, question: typeof examQuestions.$inferSelect) {
+	const expected = question.correctAnswers?.length
+		? [...question.correctAnswers].sort((a, b) => a - b)
+		: question.correctAnswer === null
+			? []
+			: [question.correctAnswer];
+	const actual = answerIndices(value);
+	return (
+		expected.length === actual.length && expected.every((answer, index) => answer === actual[index])
+	);
+}
+
 export async function closeAttempt(id: string, timedOut = false) {
 	const db = database();
 	const [attempt] = await db.select().from(attempts).where(eq(attempts.id, id));
@@ -26,7 +51,7 @@ export async function closeAttempt(id: string, timedOut = false) {
 	let objectiveScore = 0;
 	for (const question of questions) {
 		const value = answerByQuestionId.get(question.id)?.value;
-		if (question.type === 'multiple' && value === String(question.correctAnswer)) {
+		if (question.type === 'multiple' && value && isCorrectMultipleAnswer(value, question)) {
 			objectiveScore += question.points;
 		}
 	}

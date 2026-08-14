@@ -62,6 +62,7 @@ export const POST = async (e) => {
 								content: question.content,
 								options: question.options,
 								correctAnswer: question.correctAnswer,
+								correctAnswers: question.correctAnswers,
 								points: question.points,
 								// Save the resolved order so this attempt remains unchanged later.
 								sortOrder: index + 1
@@ -98,6 +99,7 @@ export const POST = async (e) => {
 							type: question.type as 'multiple' | 'short' | 'essay',
 							content: question.content,
 							options: question.options ?? [],
+							allowsMultipleAnswers: (question.correctAnswers?.length ?? 0) > 1,
 							points: question.points,
 							answer:
 								savedAnswers.find((answer) => answer.attemptQuestionId === question.id)?.value || ''

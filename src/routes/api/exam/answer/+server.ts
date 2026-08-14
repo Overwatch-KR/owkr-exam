@@ -8,6 +8,25 @@ import { answers, examQuestions } from '$lib/server/schema';
 import { user } from '$lib/server/guard';
 import { ensureOpen } from '$lib/server/exam';
 
+function validChoiceAnswer(value: string, optionCount: number, allowsMultipleAnswers: boolean) {
+	try {
+		const parsed = JSON.parse(value);
+		if (Array.isArray(parsed)) {
+			const unique = new Set(parsed);
+			return (
+				allowsMultipleAnswers &&
+				unique.size === parsed.length &&
+				parsed.length > 0 &&
+				parsed.every((item) => Number.isInteger(item) && item >= 0 && item < optionCount)
+			);
+		}
+	} catch {
+		// 단일정답은 기존처럼 숫자 문자열을 허용합니다.
+	}
+	const choice = Number(value);
+	return !allowsMultipleAnswers && Number.isInteger(choice) && choice >= 0 && choice < optionCount;
+}
+
 export const POST = async (e) => {
 	const currentUser = user(e);
 	try {
@@ -19,6 +38,17 @@ export const POST = async (e) => {
 					.from(examQuestions)
 					.where(eq(examQuestions.id, attemptQuestionId));
 				if (!question) throw new ExamRequestError(404, '문제를 찾을 수 없습니다.');
+				if (
+					question.type === 'multiple' &&
+					value &&
+					!validChoiceAnswer(
+						value,
+						question.options?.length ?? 0,
+						(question.correctAnswers?.length ?? 0) > 1
+					)
+				) {
+					throw new ExamRequestError(400, '객관식 선택 값을 확인해 주세요.');
+				}
 				const attempt = await ensureOpen(question.attemptId, currentUser.id).catch(() => {
 					throw new ExamRequestError(404, '응시 기록을 찾을 수 없습니다.');
 				});

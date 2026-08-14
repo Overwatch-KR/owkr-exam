@@ -8,6 +8,7 @@
 		content: string;
 		options: string[] | null;
 		correctAnswer: number | null;
+		correctAnswers?: number[] | null;
 		points: number;
 		updatedAt?: Date;
 		revision?: number;
@@ -38,7 +39,13 @@
 			})
 		)
 	);
-	let correctAnswer = $state(initialQuestion?.correctAnswer ?? 0);
+	let correctAnswers = $state(
+		initialQuestion?.correctAnswers?.length
+			? initialQuestion.correctAnswers
+			: initialQuestion?.correctAnswer === null || initialQuestion?.correctAnswer === undefined
+				? [0]
+				: [initialQuestion.correctAnswer]
+	);
 
 	const types: Array<{ value: QuestionType; label: string; description: string }> = [
 		{ value: 'multiple', label: '객관식', description: '보기 중 정답을 선택' },
@@ -53,8 +60,19 @@
 	function removeOption(index: number) {
 		if (optionRows.length <= 2) return;
 		optionRows.splice(index, 1);
-		if (correctAnswer === index) correctAnswer = 0;
-		else if (correctAnswer > index) correctAnswer -= 1;
+		correctAnswers = correctAnswers
+			.filter((answer) => answer !== index)
+			.map((answer) => (answer > index ? answer - 1 : answer));
+		if (!correctAnswers.length) correctAnswers = [0];
+	}
+
+	function toggleCorrectAnswer(index: number) {
+		if (correctAnswers.includes(index)) {
+			if (correctAnswers.length > 1)
+				correctAnswers = correctAnswers.filter((answer) => answer !== index);
+			return;
+		}
+		correctAnswers = [...correctAnswers, index].sort((a, b) => a - b);
 	}
 </script>
 
@@ -120,7 +138,7 @@
 			<div class="flex items-center justify-between gap-3">
 				<div>
 					<legend class="text-sm font-bold">보기와 정답</legend>
-					<p class="text-muted mt-1 text-xs">왼쪽 원을 눌러 정답을 선택하세요.</p>
+					<p class="text-muted mt-1 text-xs">정답 보기를 하나 이상 선택하세요.</p>
 				</div>
 				<button
 					type="button"
@@ -133,19 +151,20 @@
 					<div class="flex items-center gap-2">
 						<label
 							class="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border font-mono text-xs font-bold"
-							class:border-[#087ba8]={correctAnswer === index}
-							class:bg-[#087ba8]={correctAnswer === index}
-							class:text-white={correctAnswer === index}
-							class:border-line={correctAnswer !== index}
-							class:text-muted={correctAnswer !== index}
-							aria-label={`${index + 1}번을 정답으로 선택`}
+							class:border-[#087ba8]={correctAnswers.includes(index)}
+							class:bg-[#087ba8]={correctAnswers.includes(index)}
+							class:text-white={correctAnswers.includes(index)}
+							class:border-line={!correctAnswers.includes(index)}
+							class:text-muted={!correctAnswers.includes(index)}
+							aria-label={`${index + 1}번을 정답에 포함`}
 						>
 							<input
 								class="sr-only"
-								type="radio"
+								type="checkbox"
 								name="correct"
 								value={index}
-								bind:group={correctAnswer}
+								checked={correctAnswers.includes(index)}
+								onchange={() => toggleCorrectAnswer(index)}
 							/>
 							{index + 1}
 						</label>

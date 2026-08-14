@@ -12,6 +12,7 @@
 		content: string;
 		options: string[] | null;
 		correctAnswer: number | null;
+		correctAnswers: number[] | null;
 		points: number;
 		updatedAt: Date;
 		revision: number;
@@ -44,6 +45,25 @@
 			: null
 	);
 	const partialScore = (points: number) => points / 2;
+	const correctOptionIndices = (question: {
+		correctAnswer: number | null;
+		correctAnswers?: number[] | null;
+	}) =>
+		question.correctAnswers?.length
+			? question.correctAnswers
+			: question.correctAnswer === null
+				? []
+				: [question.correctAnswer];
+	function answerOptionIndices(value: string) {
+		try {
+			const parsed = JSON.parse(value);
+			if (Array.isArray(parsed)) return parsed.filter(Number.isInteger);
+		} catch {
+			// 단일정답은 숫자 문자열로 저장됩니다.
+		}
+		const choice = Number(value);
+		return Number.isInteger(choice) ? [choice] : [];
+	}
 
 	$effect(() => {
 		if (actionForm.conflict) return;
@@ -423,19 +443,30 @@
 													{#each data.selectedQuestion.options as option, index}
 														<li
 															class="flex items-start gap-3 border px-4 py-3 text-sm leading-6"
-															class:border-[#087ba8]={data.selectedQuestion.correctAnswer === index}
-															class:bg-[#effbff]={data.selectedQuestion.correctAnswer === index}
-															class:border-line={data.selectedQuestion.correctAnswer !== index}
+															class:border-[#087ba8]={correctOptionIndices(
+																data.selectedQuestion
+															).includes(index)}
+															class:bg-[#effbff]={correctOptionIndices(
+																data.selectedQuestion
+															).includes(index)}
+															class:border-line={!correctOptionIndices(
+																data.selectedQuestion
+															).includes(index)}
 														>
 															<span
 																class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full font-mono text-xs font-bold"
-																class:bg-[#087ba8]={data.selectedQuestion.correctAnswer === index}
-																class:text-white={data.selectedQuestion.correctAnswer === index}
-																class:text-[#087ba8]={data.selectedQuestion.correctAnswer !== index}
-																>{index + 1}</span
+																class:bg-[#087ba8]={correctOptionIndices(
+																	data.selectedQuestion
+																).includes(index)}
+																class:text-white={correctOptionIndices(
+																	data.selectedQuestion
+																).includes(index)}
+																class:text-[#087ba8]={!correctOptionIndices(
+																	data.selectedQuestion
+																).includes(index)}>{index + 1}</span
 															>
 															<span class="flex-1">{option}</span>
-															{#if data.selectedQuestion.correctAnswer === index}
+															{#if correctOptionIndices(data.selectedQuestion).includes(index)}
 																<span
 																	class="inline-flex shrink-0 items-center gap-1 rounded-sm bg-[#087ba8] px-2 py-1 text-[10px] leading-none font-bold text-white"
 																>
@@ -740,14 +771,18 @@
 													<p class="mt-3 line-clamp-2 text-sm leading-6 font-semibold">
 														{q.content}
 													</p>
-													{#if q.answer !== '' && q.options?.[Number(q.answer)]}
+													{#if q.answer !== '' && answerOptionIndices(q.answer).length}
 														<div class="mt-3 border-l-2 border-[#087ba8] bg-[#effbff] px-3 py-2">
 															<p class="text-xs font-bold text-[#087ba8]">
-																{Number(q.answer) + 1}번 선택
+																{answerOptionIndices(q.answer)
+																	.map((answer) => answer + 1)
+																	.join(', ')}번 선택
 															</p>
-															<p class="mt-1 text-sm leading-5 text-[#34404d]">
-																{q.options[Number(q.answer)]}
-															</p>
+															{#each answerOptionIndices(q.answer) as answer}
+																<p class="mt-1 text-sm leading-5 text-[#34404d]">
+																	{q.options?.[answer]}
+																</p>
+															{/each}
 														</div>
 													{:else}
 														<p class="mt-3 text-sm text-[#6a7684]">(미응답)</p>

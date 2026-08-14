@@ -17,6 +17,7 @@ export const questions = pgTable('questions', {
 	content: text('content').notNull(),
 	options: jsonb('options').$type<string[]>(),
 	correctAnswer: integer('correct_answer'),
+	correctAnswers: jsonb('correct_answers').$type<number[]>(),
 	points: numeric('points', { precision: 10, scale: 2, mode: 'number' }).notNull(),
 	sortOrder: integer('sort_order').notNull(),
 	active: boolean('active').notNull().default(true),
@@ -69,6 +70,7 @@ export const examQuestions = pgTable('exam_questions', {
 	content: text('content').notNull(),
 	options: jsonb('options').$type<string[]>(),
 	correctAnswer: integer('correct_answer'),
+	correctAnswers: jsonb('correct_answers').$type<number[]>(),
 	points: numeric('points', { precision: 10, scale: 2, mode: 'number' }).notNull(),
 	sortOrder: integer('sort_order').notNull()
 });
