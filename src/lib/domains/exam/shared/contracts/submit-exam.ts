@@ -7,8 +7,8 @@ export const submitExamInputSchema = z.object({
 });
 export const submitExamResultSchema = z.object({
 	submittedAt: z.iso.datetime(),
-	objectiveScore: z.number().int().nonnegative(),
-	objectiveMaxScore: z.number().int().nonnegative()
+	objectiveScore: z.number().nonnegative(),
+	objectiveMaxScore: z.number().nonnegative()
 });
 
 export type SubmitExamMutationInput = InferSchema<typeof submitExamInputSchema>;

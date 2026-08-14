@@ -4,7 +4,11 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Cookies } from '@sveltejs/kit';
 
 export type User = { id: string; username: string; displayName: string; avatar: string | null };
-const secret = () => env.SESSION_SECRET || 'development-only-change-me';
+const secret = () => {
+	if (env.SESSION_SECRET) return env.SESSION_SECRET;
+	if (dev) return 'development-only-change-me';
+	throw new Error('SESSION_SECRET 환경변수가 필요합니다.');
+};
 const localAuthHostnames = new Set(['localhost', '127.0.0.1', '[::1]']);
 export const localAdminUser: User = {
 	id: 'owkr-local-admin',

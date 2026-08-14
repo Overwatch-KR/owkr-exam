@@ -6,6 +6,7 @@ import { ExamRequestError, examRequestError } from '$lib/domains/exam/server/pub
 import { database } from '$lib/server/db';
 import { attempts, examCodes, examQuestions, questions, answers } from '$lib/server/schema';
 import { user } from '$lib/server/guard';
+import { closeAttempt } from '$lib/server/exam';
 
 function shuffle<T>(items: T[]) {
 	const shuffled = [...items];
@@ -35,7 +36,7 @@ export const POST = async (e) => {
 		const result = await executeContract(
 			implementMutation(startExamMutation, async ({ code: examCode }) => {
 				const db = database();
-				return db.transaction(async (tx) => {
+				const startResult = await db.transaction(async (tx) => {
 					const [code] = await tx
 						.select()
 						.from(examCodes)
@@ -49,6 +50,9 @@ export const POST = async (e) => {
 						.select()
 						.from(attempts)
 						.where(and(eq(attempts.codeId, code.id), isNull(attempts.submittedAt)));
+					if (attempt && attempt.expiresAt <= new Date()) {
+						return { type: 'expired' as const, attemptId: attempt.id };
+					}
 					if (!attempt) {
 						if (!code.reusable && code.status !== 'unused') {
 							throw new ExamRequestError(409, '이미 사용되었거나 만료된 코드입니다.');
@@ -114,20 +118,29 @@ export const POST = async (e) => {
 								)
 						: [];
 					return {
-						id: attempt.id,
-						expiresAt: attempt.expiresAt.toISOString(),
-						questions: examQuestionRows.map((question) => ({
-							id: question.id,
-							type: question.type as 'multiple' | 'short' | 'essay',
-							content: question.content,
-							options: question.options ?? [],
-							allowsMultipleAnswers: (question.correctAnswers?.length ?? 0) > 1,
-							points: question.points,
-							answer:
-								savedAnswers.find((answer) => answer.attemptQuestionId === question.id)?.value || ''
-						}))
+						type: 'ready' as const,
+						attempt: {
+							id: attempt.id,
+							expiresAt: attempt.expiresAt.toISOString(),
+							questions: examQuestionRows.map((question) => ({
+								id: question.id,
+								type: question.type as 'multiple' | 'short' | 'essay',
+								content: question.content,
+								options: question.options ?? [],
+								allowsMultipleAnswers: (question.correctAnswers?.length ?? 0) > 1,
+								points: question.points,
+								answer:
+									savedAnswers.find((answer) => answer.attemptQuestionId === question.id)?.value ||
+									''
+							}))
+						}
 					};
 				});
+				if (startResult.type === 'expired') {
+					await closeAttempt(startResult.attemptId, true);
+					throw new ExamRequestError(409, '시험 시간이 초과되었습니다.');
+				}
+				return startResult.attempt;
 			}),
 			await e.request.json()
 		);

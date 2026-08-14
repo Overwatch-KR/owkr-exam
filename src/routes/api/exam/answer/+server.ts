@@ -1,12 +1,12 @@
 import { json } from '@sveltejs/kit';
 import { executeContract, implementMutation } from 'boundra';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { saveAnswerMutation } from '$lib/domains/exam/shared/public';
 import { ExamRequestError, examRequestError } from '$lib/domains/exam/server/public';
 import { database } from '$lib/server/db';
-import { answers, examQuestions } from '$lib/server/schema';
+import { answers, attempts, examQuestions } from '$lib/server/schema';
 import { user } from '$lib/server/guard';
-import { ensureOpen } from '$lib/server/exam';
+import { closeAttempt } from '$lib/server/exam';
 
 function validChoiceAnswer(value: string, optionCount: number, allowsMultipleAnswers: boolean) {
 	try {
@@ -33,39 +33,51 @@ export const POST = async (e) => {
 		const result = await executeContract(
 			implementMutation(saveAnswerMutation, async ({ attemptQuestionId, value }) => {
 				const db = database();
-				const [question] = await db
-					.select()
-					.from(examQuestions)
-					.where(eq(examQuestions.id, attemptQuestionId));
-				if (!question) throw new ExamRequestError(404, '문제를 찾을 수 없습니다.');
-				if (
-					question.type === 'multiple' &&
-					value &&
-					!validChoiceAnswer(
-						value,
-						question.options?.length ?? 0,
-						(question.correctAnswers?.length ?? 0) > 1
-					)
-				) {
-					throw new ExamRequestError(400, '객관식 선택 값을 확인해 주세요.');
-				}
-				const attempt = await ensureOpen(question.attemptId, currentUser.id).catch(() => {
-					throw new ExamRequestError(404, '응시 기록을 찾을 수 없습니다.');
+				const saveResult = await db.transaction(async (tx) => {
+					const [question] = await tx
+						.select()
+						.from(examQuestions)
+						.where(eq(examQuestions.id, attemptQuestionId));
+					if (!question) throw new ExamRequestError(404, '문제를 찾을 수 없습니다.');
+					if (
+						question.type === 'multiple' &&
+						value &&
+						!validChoiceAnswer(
+							value,
+							question.options?.length ?? 0,
+							(question.correctAnswers?.length ?? 0) > 1
+						)
+					) {
+						throw new ExamRequestError(400, '객관식 선택 값을 확인해 주세요.');
+					}
+					const [attempt] = await tx
+						.select()
+						.from(attempts)
+						.where(and(eq(attempts.id, question.attemptId), eq(attempts.discordId, currentUser.id)))
+						.for('update');
+					if (!attempt) throw new ExamRequestError(404, '응시 기록을 찾을 수 없습니다.');
+					if (attempt.submittedAt) {
+						throw new ExamRequestError(
+							409,
+							attempt.timedOut ? '시험 시간이 초과되었습니다.' : '이미 제출된 시험입니다.'
+						);
+					}
+					if (attempt.expiresAt <= new Date()) {
+						return { expiredAttemptId: attempt.id };
+					}
+					await tx
+						.insert(answers)
+						.values({ attemptQuestionId: question.id, value, updatedAt: new Date() })
+						.onConflictDoUpdate({
+							target: answers.attemptQuestionId,
+							set: { value, updatedAt: new Date() }
+						});
+					return { expiredAttemptId: null };
 				});
-				if (!attempt) throw new ExamRequestError(404, '응시 기록을 찾을 수 없습니다.');
-				if (attempt.submittedAt) {
-					throw new ExamRequestError(
-						409,
-						attempt.timedOut ? '시험 시간이 초과되었습니다.' : '이미 제출된 시험입니다.'
-					);
+				if (saveResult.expiredAttemptId) {
+					await closeAttempt(saveResult.expiredAttemptId, true);
+					throw new ExamRequestError(409, '시험 시간이 초과되었습니다.');
 				}
-				await db
-					.insert(answers)
-					.values({ attemptQuestionId: question.id, value, updatedAt: new Date() })
-					.onConflictDoUpdate({
-						target: answers.attemptQuestionId,
-						set: { value, updatedAt: new Date() }
-					});
 				return { ok: true as const };
 			}),
 			await e.request.json()

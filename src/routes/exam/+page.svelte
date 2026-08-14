@@ -27,6 +27,7 @@
 	let saveError = $state('');
 	let remaining = $state(0);
 	let confirm = $state(false);
+	let submitting = $state(false);
 	let q = $derived(attempt?.questions[index]);
 	let answeredCount = $derived(
 		attempt?.questions.filter((item) => values[item.id]?.trim()).length ?? 0
@@ -84,6 +85,7 @@
 		addEventListener('blur', onBlur);
 		return () => {
 			clearInterval(timer);
+			clearPendingSaveTimers();
 			removeEventListener('pageshow', onShow);
 			removeEventListener('popstate', onPop);
 			removeEventListener('keydown', onKeydown);
@@ -125,17 +127,57 @@
 	}
 
 	let timers: Record<string, ReturnType<typeof setTimeout>> = {};
+	let saveChains: Record<string, Promise<void>> = {};
+	const dirtyAnswerIds = new Set<string>();
+	const failedAnswerIds = new Set<string>();
 
 	function save(id: string) {
+		dirtyAnswerIds.add(id);
 		clearTimeout(timers[id]);
-		timers[id] = setTimeout(async () => {
-			try {
-				await saveAnswer({ attemptQuestionId: id, value: values[id] ?? '' });
-				saveError = '';
-			} catch {
-				saveError = '답안을 저장하지 못했습니다. 네트워크를 확인한 뒤 다시 입력해 주세요.';
-			}
+		timers[id] = setTimeout(() => {
+			delete timers[id];
+			void persistAnswer(id).catch(() => undefined);
 		}, 500);
+	}
+
+	async function persistAnswer(id: string) {
+		const value = values[id] ?? '';
+		const previous = saveChains[id] ?? Promise.resolve();
+		const request = previous
+			.catch(() => undefined)
+			.then(() => saveAnswer({ attemptQuestionId: id, value }))
+			.then(() => {
+				failedAnswerIds.delete(id);
+				if ((values[id] ?? '') === value) dirtyAnswerIds.delete(id);
+				saveError = failedAnswerIds.size
+					? '일부 답안을 저장하지 못했습니다. 네트워크를 확인해 주세요.'
+					: '';
+			})
+			.catch((error) => {
+				failedAnswerIds.add(id);
+				saveError = '답안을 저장하지 못했습니다. 네트워크를 확인한 뒤 다시 입력해 주세요.';
+				throw error;
+			});
+		saveChains[id] = request;
+		try {
+			await request;
+		} finally {
+			if (saveChains[id] === request) delete saveChains[id];
+		}
+	}
+
+	async function flushPendingAnswers() {
+		const answerIds = [...dirtyAnswerIds];
+		for (const id of answerIds) {
+			clearTimeout(timers[id]);
+			delete timers[id];
+		}
+		await Promise.all(answerIds.map(persistAnswer));
+	}
+
+	function clearPendingSaveTimers() {
+		for (const timer of Object.values(timers)) clearTimeout(timer);
+		timers = {};
 	}
 
 	function goNext() {
@@ -157,8 +199,9 @@
 	}
 
 	function selectedChoiceIndices(value: string | undefined) {
+		if (!value?.trim()) return [];
 		try {
-			const parsed = JSON.parse(value || '');
+			const parsed = JSON.parse(value);
 			if (Array.isArray(parsed)) return parsed.filter(Number.isInteger);
 		} catch {
 			// 단일정답은 숫자 문자열로 저장됩니다.
@@ -168,8 +211,11 @@
 	}
 
 	async function submit(timeout = false) {
-		if (!attempt) return;
+		if (!attempt || submitting) return;
+		submitting = true;
 		try {
+			if (timeout) clearPendingSaveTimers();
+			else await flushPendingAnswers();
 			const submitted = await submitExam({ attemptId: attempt.id, timeout });
 			attempt = {
 				...attempt,
@@ -178,8 +224,11 @@
 			confirm = false;
 		} catch (error) {
 			toast.error(
-				examErrorMessage(error, '시험을 제출하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+				saveError ||
+					examErrorMessage(error, '시험을 제출하지 못했습니다. 잠시 후 다시 시도해 주세요.')
 			);
+		} finally {
+			submitting = false;
 		}
 	}
 </script>
@@ -381,6 +430,7 @@
 							? 'btn mt-3 w-full ring-2 ring-[#087ba8]/20 ring-offset-2'
 							: 'btn mt-5 w-full'}
 						aria-describedby={allAnswered ? 'all-answered' : undefined}
+						disabled={submitting}
 						onclick={() => (confirm = true)}>시험 제출</button
 					>
 				</aside>
@@ -476,7 +526,9 @@
 				</AlertDialog.Description>
 				<div class="mt-7 flex justify-end gap-2">
 					<AlertDialog.Cancel class="btn-secondary">계속 작성</AlertDialog.Cancel>
-					<button type="button" class="btn" onclick={() => submit()}>제출하기</button>
+					<button type="button" class="btn" disabled={submitting} onclick={() => submit()}>
+						{submitting ? '답안 저장 중…' : '제출하기'}
+					</button>
 				</div>
 			</div>
 		</AlertDialog.Content>
