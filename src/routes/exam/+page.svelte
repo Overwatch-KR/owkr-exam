@@ -359,65 +359,67 @@
 					>
 				</aside>
 				{#if q}
-					<section
-						class="border border-[#d5dce2] bg-white p-6 shadow-[0_1px_1px_rgba(17,24,32,0.02)] sm:p-9"
-					>
-						<div class="border-b-2 border-[#34404d] pb-6">
-							<div class="flex items-baseline justify-between">
-								<p class="font-mono text-sm font-bold text-[#087ba8]">문제 {index + 1}</p>
-								<span class="text-sm font-semibold text-[#52616e]">배점 {q.points}점</span>
+					{#key q.id}
+						<section
+							class="border border-[#d5dce2] bg-white p-6 shadow-[0_1px_1px_rgba(17,24,32,0.02)] sm:p-9"
+						>
+							<div class="border-b-2 border-[#34404d] pb-6">
+								<div class="flex items-baseline justify-between">
+									<p class="font-mono text-sm font-bold text-[#087ba8]">문제 {index + 1}</p>
+									<span class="text-sm font-semibold text-[#52616e]">배점 {q.points}점</span>
+								</div>
+								<h1
+									class="mt-6 text-xl leading-9 font-medium tracking-[-.02em] whitespace-pre-wrap sm:text-[22px]"
+								>
+									{q.content}
+								</h1>
 							</div>
-							<h1
-								class="mt-6 text-xl leading-9 font-medium tracking-[-.02em] whitespace-pre-wrap sm:text-[22px]"
-							>
-								{q.content}
-							</h1>
-						</div>
-						{#if q.type === 'multiple'}
-							<div class="mt-8 border border-[#cfd8df]">
-								{#each q.options as option, i}<label
-										class="flex cursor-pointer gap-4 border-b border-[#dfe4e9] bg-white px-5 py-4 last:border-0 hover:bg-[#f5fbfd]"
-										><input
-											type={q.allowsMultipleAnswers ? 'checkbox' : 'radio'}
-											name={q.id}
-											value={String(i)}
-											checked={selectedChoiceIndices(values[q.id]).includes(i)}
-											onchange={() => selectChoice(i)}
-											class="mt-0.5"
-										/><span class="text-sm leading-6"
-											><b class="mr-2 text-[#087ba8]">{i + 1}.</b>{option}</span
-										></label
-									>{/each}
+							{#if q.type === 'multiple'}
+								<div class="mt-8 border border-[#cfd8df]">
+									{#each q.options as option, i}<label
+											class="flex cursor-pointer gap-4 border-b border-[#dfe4e9] bg-white px-5 py-4 last:border-0 hover:bg-[#f5fbfd]"
+											><input
+												type={q.allowsMultipleAnswers ? 'checkbox' : 'radio'}
+												name={q.id}
+												value={String(i)}
+												checked={selectedChoiceIndices(values[q.id]).includes(i)}
+												onchange={() => selectChoice(i)}
+												class="mt-0.5"
+											/><span class="text-sm leading-6"
+												><b class="mr-2 text-[#087ba8]">{i + 1}.</b>{option}</span
+											></label
+										>{/each}
+								</div>
+								{#if q.allowsMultipleAnswers}
+									<p class="mt-3 text-xs text-[#6a7684]">
+										복수 선택 문제입니다. 해당하는 보기를 모두 선택하세요.
+									</p>
+								{/if}
+							{:else}<textarea
+									aria-label={`${index + 1}번 문제 답안`}
+									class="mt-8 min-h-52 w-full leading-7"
+									bind:value={values[q.id]}
+									oninput={() => save(q.id)}
+									placeholder={q.type === 'short'
+										? '답변을 입력하세요.'
+										: '답변을 충분히 작성하세요.'}></textarea>{/if}
+							<div class="mt-8 flex justify-between border-t-2 border-[#34404d] pt-5">
+								<button
+									type="button"
+									class="btn-secondary"
+									disabled={index === 0}
+									onclick={() => index--}>← 이전 문제</button
+								>
+								<button
+									type="button"
+									class="btn-secondary"
+									disabled={index === attempt.questions.length - 1}
+									onclick={goNext}
+									>다음 문제 →
+								</button>
 							</div>
-							{#if q.allowsMultipleAnswers}
-								<p class="mt-3 text-xs text-[#6a7684]">
-									복수 선택 문제입니다. 해당하는 보기를 모두 선택하세요.
-								</p>
-							{/if}
-						{:else}<textarea
-								aria-label={`${index + 1}번 문제 답안`}
-								class="mt-8 min-h-52 w-full leading-7"
-								bind:value={values[q.id]}
-								oninput={() => save(q.id)}
-								placeholder={q.type === 'short'
-									? '답변을 입력하세요.'
-									: '답변을 충분히 작성하세요.'}></textarea>{/if}
-						<div class="mt-8 flex justify-between border-t-2 border-[#34404d] pt-5">
-							<button
-								type="button"
-								class="btn-secondary"
-								disabled={index === 0}
-								onclick={() => index--}>← 이전 문제</button
-							>
-							<button
-								type="button"
-								class="btn-secondary"
-								disabled={index === attempt.questions.length - 1}
-								onclick={goNext}
-								>다음 문제 →
-							</button>
-						</div>
-					</section>
+						</section>
+					{/key}
 				{/if}
 			</div>
 		</div>
