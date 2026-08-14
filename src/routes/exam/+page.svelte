@@ -31,6 +31,9 @@
 	let answeredCount = $derived(
 		attempt?.questions.filter((item) => values[item.id]?.trim()).length ?? 0
 	);
+	let allAnswered = $derived(
+		Boolean(attempt?.questions.length) && answeredCount === attempt?.questions.length
+	);
 	onMount(() => {
 		const timer = setInterval(() => {
 			if (attempt) {
@@ -367,8 +370,18 @@
 					<p class="mt-3 text-[11px] leading-5 text-[#52616e]">
 						Shift + Enter: 다음 문제<br />1–5: 객관식 선택{q?.allowsMultipleAnswers ? '/해제' : ''}
 					</p>
-					<button type="button" class="btn mt-5 w-full" onclick={() => (confirm = true)}
-						>시험 제출</button
+					{#if allAnswered}
+						<p id="all-answered" class="mt-4 text-center text-xs font-semibold text-[#087ba8]">
+							모든 문항에 답했습니다.
+						</p>
+					{/if}
+					<button
+						type="button"
+						class={allAnswered
+							? 'btn mt-3 w-full ring-2 ring-[#087ba8]/20 ring-offset-2'
+							: 'btn mt-5 w-full'}
+						aria-describedby={allAnswered ? 'all-answered' : undefined}
+						onclick={() => (confirm = true)}>시험 제출</button
 					>
 				</aside>
 				{#if q}
