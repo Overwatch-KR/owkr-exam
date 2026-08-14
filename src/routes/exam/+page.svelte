@@ -378,14 +378,25 @@
 								<div class="mt-8 border border-[#cfd8df]">
 									{#each q.options as option, i}<label
 											class="flex cursor-pointer gap-4 border-b border-[#dfe4e9] bg-white px-5 py-4 last:border-0 hover:bg-[#f5fbfd]"
-											><input
-												type={q.allowsMultipleAnswers ? 'checkbox' : 'radio'}
-												name={q.id}
-												value={String(i)}
-												checked={selectedChoiceIndices(values[q.id]).includes(i)}
-												onchange={() => selectChoice(i)}
-												class="mt-0.5"
-											/><span class="text-sm leading-6"
+											>{#if q.allowsMultipleAnswers}
+												<input
+													type="checkbox"
+													name={q.id}
+													value={String(i)}
+													checked={selectedChoiceIndices(values[q.id]).includes(i)}
+													onchange={() => selectChoice(i)}
+													class="mt-0.5"
+												/>
+											{:else}
+												<input
+													type="radio"
+													name={q.id}
+													value={String(i)}
+													bind:group={values[q.id]}
+													onchange={() => save(q.id)}
+													class="mt-0.5"
+												/>
+											{/if}<span class="text-sm leading-6"
 												><b class="mr-2 text-[#087ba8]">{i + 1}.</b>{option}</span
 											></label
 										>{/each}
