@@ -33,12 +33,20 @@
 	const activeSection = $derived(tab);
 	let editingQuestion = $state(false);
 	let deleteQuestionOpen = $state(false);
+	let dismissedConflictRevision = $state<string | null>(null);
+	let conflictForEditing = $state<QuestionConflict | null>(null);
 	const actionForm = $derived((form ?? {}) as AdminForm);
 	const questionConflict = $derived((actionForm.conflict ?? null) as QuestionConflict | null);
-	const hasQuestionConflict = $derived(Boolean(questionConflict));
+	const activeQuestionConflict = $derived(
+		questionConflict &&
+			questionConflict.latest.updatedAt.toISOString() !== dismissedConflictRevision
+			? questionConflict
+			: null
+	);
 	const partialScore = (points: number) => points / 2;
 
 	$effect(() => {
+		if (actionForm.conflict) return;
 		const message = actionForm.success ?? actionForm.message;
 		if (!message) return;
 		if (actionForm.success) toast.success(message);
@@ -79,6 +87,23 @@
 		deleteQuestionOpen = false;
 		data = { ...data, selectedQuestion: null } as typeof initialData;
 		pushState('/admin/questions', {});
+	}
+
+	function continueEditingConflict(conflict: QuestionConflict) {
+		conflictForEditing = conflict;
+		dismissedConflictRevision = conflict.latest.updatedAt.toISOString();
+		editingQuestion = true;
+	}
+
+	function applyLatestQuestion(conflict: QuestionConflict) {
+		if (!data.selectedQuestion) return;
+		data = {
+			...data,
+			selectedQuestion: { ...data.selectedQuestion, ...conflict.latest }
+		} as typeof initialData;
+		conflictForEditing = null;
+		dismissedConflictRevision = conflict.latest.updatedAt.toISOString();
+		editingQuestion = false;
 	}
 
 	async function refreshQuestionList(selectedQuestionId: string) {
@@ -322,21 +347,14 @@
 										</div>
 										<div class="flex w-full flex-wrap items-center justify-between gap-3">
 											<div class="flex items-center gap-2">
-												{#if questionConflict}
-													<a
-														href={`/admin/questions?question=${data.selectedQuestion.id}#question-detail`}
-														onclick={closeQuestion}
-														class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
-														>최신본으로 돌아가기</a
-													>
-												{:else}
-													<button
-														type="button"
-														class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
-														onclick={() => (editingQuestion = !editingQuestion)}
-														>{editingQuestion ? '수정 취소' : '문제 수정'}</button
-													>
-												{/if}
+												<button
+													type="button"
+													class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
+													onclick={() => {
+														editingQuestion = !editingQuestion;
+														if (!editingQuestion) conflictForEditing = null;
+													}}>{editingQuestion ? '수정 취소' : '문제 수정'}</button
+												>
 												<a
 													href="/admin/questions"
 													onclick={closeQuestion}
@@ -357,47 +375,12 @@
 											'수정 이력 없음'}{#if data.selectedQuestion.updatedByName}
 											· {data.selectedQuestion.updatedAt.toLocaleString('ko-KR')}{/if}
 									</p>
-									{#if editingQuestion || hasQuestionConflict}
+									{#if editingQuestion}
 										<div class="mt-5">
-											{#if questionConflict}
-												<div class="mb-5 border-l-2 border-amber-600 bg-amber-50 px-4 py-4">
-													<p class="text-sm font-bold text-amber-900">수정 충돌이 감지되었습니다</p>
-													<p class="mt-1 text-xs leading-5 text-amber-800">
-														아래 편집칸에는 내가 작성한 내용이 유지됩니다. 최신 저장본을 확인한 뒤
-														필요한 부분만 반영해 다시 저장하세요.
-													</p>
-													<div class="mt-4 grid gap-3 sm:grid-cols-2">
-														<div class="border border-amber-200 bg-white p-3">
-															<p class="text-[10px] font-bold tracking-wide text-amber-800">
-																최신 저장본
-															</p>
-															<p class="mt-2 text-xs text-[#6a7684]">
-																{questionTypeLabel(questionConflict.latest.type)} · {questionConflict
-																	.latest.points}점
-															</p>
-															<p class="mt-2 text-sm leading-6 whitespace-pre-wrap">
-																{questionConflict.latest.content}
-															</p>
-														</div>
-														<div class="border border-amber-200 bg-white p-3">
-															<p class="text-[10px] font-bold tracking-wide text-amber-800">
-																내가 작성한 내용
-															</p>
-															<p class="mt-2 text-xs text-[#6a7684]">
-																{questionTypeLabel(questionConflict.draft.type)} · {questionConflict
-																	.draft.points}점
-															</p>
-															<p class="mt-2 text-sm leading-6 whitespace-pre-wrap">
-																{questionConflict.draft.content}
-															</p>
-														</div>
-													</div>
-												</div>
-											{/if}
 											<QuestionEditor
 												action="?/updateQuestion"
-												question={questionConflict?.latest ?? data.selectedQuestion}
-												draft={questionConflict?.draft ?? null}
+												question={conflictForEditing?.latest ?? data.selectedQuestion}
+												draft={conflictForEditing?.draft ?? null}
 												submitLabel="수정 내용 저장"
 											/>
 										</div>
@@ -494,7 +477,7 @@
 													>문제를 삭제할까요?</AlertDialog.Title
 												>
 												<AlertDialog.Description class="mt-2 text-sm leading-6 text-[#6a7684]">
-													{data.selectedQuestion.sortOrder}번은 시험에서 삭제됩니다.<br>
+													{data.selectedQuestion.sortOrder}번은 시험에서 삭제됩니다.<br />
 													이미 시작한 응시자의 문제 사본과 채점 결과는 유지됩니다.
 												</AlertDialog.Description>
 											</AlertDialog.Header>
@@ -513,6 +496,65 @@
 											</div>
 										</AlertDialog.Content>
 									</AlertDialog.Root>
+									{#if activeQuestionConflict}
+										<AlertDialog.Root open>
+											<AlertDialog.Content
+												class="max-w-2xl rounded-lg bg-white p-0 shadow-[0_24px_64px_rgba(17,24,32,0.28)]"
+											>
+												<div class="border-b border-[#e2e7ec] px-6 py-5">
+													<AlertDialog.Title class="text-lg font-bold">저장 충돌</AlertDialog.Title>
+													<AlertDialog.Description
+														class="mt-2 max-w-xl text-sm leading-6 text-[#667788]"
+													>
+														다른 관리자가 이 문제를 먼저 저장했습니다. 작성한 내용은 유지되어
+														있으며, 아래에서 두 버전을 비교한 뒤 선택할 수 있습니다.
+													</AlertDialog.Description>
+												</div>
+												<div class="grid gap-px bg-[#e2e7ec] sm:grid-cols-2">
+													<section class="min-w-0 bg-[#f8fafb] p-5">
+														<p class="text-xs font-bold text-[#34404d]">최신 저장본</p>
+														<p class="mt-1 text-xs text-[#6a7684]">
+															{questionTypeLabel(activeQuestionConflict.latest.type)} · {activeQuestionConflict
+																.latest.points}점
+														</p>
+														<p
+															class="mt-4 max-h-44 overflow-y-auto text-sm leading-6 whitespace-pre-wrap text-[#34404d]"
+														>
+															{activeQuestionConflict.latest.content}
+														</p>
+													</section>
+													<section class="min-w-0 bg-white p-5">
+														<p class="text-xs font-bold text-[#087ba8]">내가 작성한 내용</p>
+														<p class="mt-1 text-xs text-[#6a7684]">
+															{questionTypeLabel(activeQuestionConflict.draft.type)} · {activeQuestionConflict
+																.draft.points}점
+														</p>
+														<p
+															class="mt-4 max-h-44 overflow-y-auto text-sm leading-6 whitespace-pre-wrap text-[#34404d]"
+														>
+															{activeQuestionConflict.draft.content}
+														</p>
+													</section>
+												</div>
+												<div
+													class="flex flex-col-reverse gap-2 border-t border-[#e2e7ec] px-6 py-4 sm:flex-row sm:justify-end"
+												>
+													<AlertDialog.Action
+														class="btn-secondary"
+														onclick={() => applyLatestQuestion(activeQuestionConflict)}
+													>
+														최신 저장본 적용
+													</AlertDialog.Action>
+													<AlertDialog.Action
+														class="btn"
+														onclick={() => continueEditingConflict(activeQuestionConflict)}
+													>
+														내 변경 계속 수정
+													</AlertDialog.Action>
+												</div>
+											</AlertDialog.Content>
+										</AlertDialog.Root>
+									{/if}
 								</article>
 							{:else}
 								<aside
