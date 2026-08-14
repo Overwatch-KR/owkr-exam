@@ -743,45 +743,56 @@
 											{data.grading.attempt.discordId}
 										</p>
 									</div>
-									<div class="grid grid-cols-4 border border-[#c8d0d9] bg-white text-center">
-										<div class="px-4 py-3">
-											<p class="text-[10px] font-semibold text-[#6a7684]">객관식</p>
-											<p class="mt-1 font-mono font-bold">
-												{data.grading.attempt.objectiveScore}
-												/{data.grading.objectiveMaxScore}
-											</p>
-										</div>
-										<div class="border-l border-[#c8d0d9] px-4 py-3">
-											<p class="text-[10px] font-semibold text-[#6a7684]">단답형</p>
-											<p class="mt-1 font-mono font-bold">
-												{data.grading.shortScore ?? '-'}
-												/{data.grading.shortMaxScore}
-											</p>
-										</div>
-										<div class="border-l border-[#c8d0d9] px-4 py-3">
-											<p class="text-[10px] font-semibold text-[#6a7684]">서술·논술형</p>
-											<p class="mt-1 font-mono font-bold">
-												{data.grading.essayScore ?? '-'}
-												/{data.grading.essayMaxScore}
-											</p>
-										</div>
-										<div class="border-l border-[#c8d0d9] px-4 py-3">
-											<p class="text-[10px] font-semibold text-[#6a7684]">총점 · 비공개</p>
-											<p class="mt-1 font-mono font-bold">
-												{data.grading.attempt.totalScore ?? '-'}
-											</p>
-											<p
-												class="mt-1 text-[10px] font-bold"
-												class:text-green-700={data.grading.essayPassed === true}
-												class:text-red-700={data.grading.essayPassed === false}
-												class:text-[#6a7684]={data.grading.essayPassed === null}
-											>
-												{data.grading.essayPassed === null
-													? '판정 대기'
-													: data.grading.essayPassed
-														? '기준 충족'
-														: '탈락'}
-											</p>
+									<div class="max-w-full overflow-x-auto">
+										<div
+											class="grid min-w-[680px] grid-cols-5 border border-[#c8d0d9] bg-white text-center"
+										>
+											<div class="px-4 py-3">
+												<p class="text-[10px] font-semibold text-[#6a7684]">객관식</p>
+												<p class="mt-1 font-mono font-bold">
+													{data.grading.attempt.objectiveScore}
+													/{data.grading.objectiveMaxScore}
+												</p>
+											</div>
+											<div class="border-l border-[#c8d0d9] px-4 py-3">
+												<p class="text-[10px] font-semibold text-[#6a7684]">단답형</p>
+												<p class="mt-1 font-mono font-bold">
+													{data.grading.shortScore ?? '-'}
+													/{data.grading.shortMaxScore}
+												</p>
+											</div>
+											<div class="border-l border-[#c8d0d9] px-4 py-3">
+												<p class="text-[10px] font-semibold text-[#6a7684]">서술형</p>
+												<p class="mt-1 font-mono font-bold">
+													{data.grading.descriptiveScore ?? '-'}
+													/{data.grading.descriptiveMaxScore}
+												</p>
+											</div>
+											<div class="border-l border-[#c8d0d9] px-4 py-3">
+												<p class="text-[10px] font-semibold text-[#6a7684]">논술형</p>
+												<p class="mt-1 font-mono font-bold">
+													{data.grading.longEssayScore ?? '-'}
+													/{data.grading.longEssayMaxScore}
+												</p>
+											</div>
+											<div class="border-l border-[#c8d0d9] px-4 py-3">
+												<p class="text-[10px] font-semibold text-[#6a7684]">총점 · 비공개</p>
+												<p class="mt-1 font-mono font-bold">
+													{data.grading.attempt.totalScore ?? '-'}
+												</p>
+												<p
+													class="mt-1 text-[10px] font-bold"
+													class:text-green-700={data.grading.writingPassed === true}
+													class:text-red-700={data.grading.writingPassed === false}
+													class:text-[#6a7684]={data.grading.writingPassed === null}
+												>
+													{data.grading.writingPassed === null
+														? '판정 대기'
+														: data.grading.writingPassed
+															? '기준 충족'
+															: '탈락'}
+												</p>
+											</div>
 										</div>
 									</div>
 								</div>
@@ -789,9 +800,9 @@
 									class="mt-5 border-l-2 border-[#087ba8] bg-[#effbff] px-3 py-2 text-xs leading-5 text-[#34404d]"
 								>
 									{data.grading.gradedCount}
-									/{data.grading.questions.length}문항 채점됨 · 서술·논술형은 {data.grading
-										.essayMaxScore}점 만점 중 {data.grading.essayPassScore}점 미만이면 탈락입니다.
-									모든 단답형과 서술·논술형 점수가 입력되면 총점이 확정됩니다.
+									/{data.grading.questions.length}문항 채점됨 · 서술형과 논술형 합산은 {data.grading
+										.writingMaxScore}점 만점 중 {data.grading.writingPassScore}점 미만이면
+									탈락입니다. 모든 단답형·서술형·논술형 점수가 입력되면 총점이 확정됩니다.
 								</p>
 								{#if data.grading.objectiveQuestions.length}
 									<section class="mt-6">
@@ -840,7 +851,11 @@
 											<article class="card p-5 sm:p-6">
 												<div class="flex items-center justify-between gap-3">
 													<p class="text-xs font-semibold text-[#087ba8]">
-														문제 {q.sortOrder} · {q.type === 'short' ? '단답형' : '서술·논술형'}
+														문제 {q.sortOrder} · {q.manualType === 'short'
+															? '단답형'
+															: q.manualType === 'longEssay'
+																? '논술형'
+																: '서술형'}
 													</p>
 													<p class="text-xs text-[#6a7684]">
 														배점 {q.points}점 · 현재 {q.score ?? '미채점'}
@@ -895,13 +910,15 @@
 											</article>
 										{/each}
 									</div>
-									<div
-										class="border-ink mt-5 flex flex-col gap-3 border-t bg-white py-4 sm:flex-row sm:items-center sm:justify-between"
-									>
-										<p class="text-xs leading-5 text-[#6a7684]">
-											입력한 모든 점수가 한 번에 저장됩니다. 빈 점수는 기존 상태를 유지합니다.
-										</p>
-										<button class="btn">채점 점수 한 번에 저장</button>
+									<div class="mt-5 flex justify-end">
+										<div
+											class="flex w-full flex-col gap-3 border border-[#dfe4e9] bg-[#f7f8fa] px-4 py-3 sm:w-auto sm:flex-row sm:items-center"
+										>
+											<p class="text-xs leading-5 text-[#6a7684] sm:text-right">
+												입력한 점수를 한 번에 저장합니다. 빈 점수는 기존 상태를 유지합니다.
+											</p>
+											<button class="btn shrink-0">채점 점수 한 번에 저장</button>
+										</div>
 									</div>
 								</form>
 							</div>
@@ -912,7 +929,7 @@
 							<span class="text-xs text-stone-500">총 {data.attempts?.length ?? 0}명</span>
 						</div>
 						<div class="border-ink overflow-x-auto border-t">
-							<table class="w-full min-w-[1160px] text-left text-sm">
+							<table class="w-full min-w-[1240px] text-left text-sm">
 								<thead class="table-head">
 									<tr>
 										<th class="p-3">지원자</th>
@@ -920,7 +937,8 @@
 										<th class="p-3">상태</th>
 										<th class="p-3">객관식</th>
 										<th class="p-3">단답형</th>
-										<th class="p-3">서술·논술형</th>
+										<th class="p-3">서술형</th>
+										<th class="p-3">논술형</th>
 										<th class="p-3">총점 · 판정</th>
 										<th class="p-3">응시 시간</th>
 										<th class="p-3"></th>
@@ -958,16 +976,17 @@
 											</td>
 											<td class="p-3">{a.submittedAt ? a.objectiveScore : '-'}</td>
 											<td class="p-3">{a.shortScore ?? '-'}</td>
-											<td class="p-3">{a.essayScore ?? '-'}</td>
+											<td class="p-3">{a.descriptiveScore ?? '-'}</td>
+											<td class="p-3">{a.longEssayScore ?? '-'}</td>
 											<td class="p-3 font-bold">
 												{a.totalScore ?? '-'}
-												{#if a.essayPassed !== null}
+												{#if a.writingPassed !== null}
 													<span
 														class="ml-2 text-xs"
-														class:text-green-700={a.essayPassed}
-														class:text-red-700={!a.essayPassed}
+														class:text-green-700={a.writingPassed}
+														class:text-red-700={!a.writingPassed}
 													>
-														{a.essayPassed ? '기준 충족' : '탈락'}
+														{a.writingPassed ? '기준 충족' : '탈락'}
 													</span>
 												{/if}
 											</td>

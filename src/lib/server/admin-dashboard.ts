@@ -5,20 +5,43 @@ import { closeAttempt } from '$lib/server/exam';
 
 export const adminSections = ['overview', 'questions', 'question-new', 'codes', 'results'] as const;
 export type AdminSection = (typeof adminSections)[number];
-const essayPassScore = 30;
+const writingPassScore = 30;
 
 type ManualQuestionScore = {
 	id: string;
 	type: string;
 	points: number;
+	sortOrder: number;
 };
+
+type ManualScoreCategory = 'short' | 'descriptive' | 'longEssay' | 'writing';
+
+function longEssayQuestionId(questions: ManualQuestionScore[]) {
+	return questions
+		.filter((question) => question.type === 'essay')
+		.sort((left, right) => right.sortOrder - left.sortOrder)[0]?.id;
+}
+
+function isInManualScoreCategory(
+	question: ManualQuestionScore,
+	category: ManualScoreCategory,
+	longEssayId: string | undefined
+) {
+	if (category === 'short') return question.type === 'short';
+	if (category === 'writing') return question.type === 'essay';
+	if (category === 'longEssay') return question.id === longEssayId;
+	return question.type === 'essay' && question.id !== longEssayId;
+}
 
 function manualScoreSummary(
 	questions: ManualQuestionScore[],
 	scoreByQuestionId: Map<string, number | null>,
-	type: 'short' | 'essay'
+	category: ManualScoreCategory,
+	longEssayId = longEssayQuestionId(questions)
 ) {
-	const matching = questions.filter((question) => question.type === type);
+	const matching = questions.filter((question) =>
+		isInManualScoreCategory(question, category, longEssayId)
+	);
 	const graded =
 		matching.length > 0 &&
 		matching.every(
@@ -34,6 +57,20 @@ function manualScoreSummary(
 			(question) =>
 				scoreByQuestionId.get(question.id) !== null && scoreByQuestionId.has(question.id)
 		).length
+	};
+}
+
+function manualScoreBreakdown(
+	questions: ManualQuestionScore[],
+	scoreByQuestionId: Map<string, number | null>
+) {
+	const longEssayId = longEssayQuestionId(questions);
+	return {
+		longEssayId,
+		short: manualScoreSummary(questions, scoreByQuestionId, 'short', longEssayId),
+		descriptive: manualScoreSummary(questions, scoreByQuestionId, 'descriptive', longEssayId),
+		longEssay: manualScoreSummary(questions, scoreByQuestionId, 'longEssay', longEssayId),
+		writing: manualScoreSummary(questions, scoreByQuestionId, 'writing', longEssayId)
 	};
 }
 
@@ -102,6 +139,7 @@ export async function loadAdminSection(section: AdminSection, url: URL) {
 					attemptId: examQuestions.attemptId,
 					type: examQuestions.type,
 					points: examQuestions.points,
+					sortOrder: examQuestions.sortOrder,
 					score: answers.score
 				})
 				.from(examQuestions)
@@ -122,15 +160,18 @@ export async function loadAdminSection(section: AdminSection, url: URL) {
 	}
 	const attemptsWithScores = allAttempts.map((attempt) => {
 		const attemptQuestions = questionsByAttemptId.get(attempt.id) ?? [];
-		const short = manualScoreSummary(attemptQuestions, scoreByQuestionId, 'short');
-		const essay = manualScoreSummary(attemptQuestions, scoreByQuestionId, 'essay');
+		const scores = manualScoreBreakdown(attemptQuestions, scoreByQuestionId);
 		return {
 			...attempt,
-			shortScore: short.score,
-			shortMaxScore: short.maxScore,
-			essayScore: essay.score,
-			essayMaxScore: essay.maxScore,
-			essayPassed: essay.score === null ? null : essay.score >= essayPassScore
+			shortScore: scores.short.score,
+			shortMaxScore: scores.short.maxScore,
+			descriptiveScore: scores.descriptive.score,
+			descriptiveMaxScore: scores.descriptive.maxScore,
+			longEssayScore: scores.longEssay.score,
+			longEssayMaxScore: scores.longEssay.maxScore,
+			writingScore: scores.writing.score,
+			writingMaxScore: scores.writing.maxScore,
+			writingPassed: scores.writing.score === null ? null : scores.writing.score >= writingPassScore
 		};
 	});
 	const selectedAttemptId = url.searchParams.get('attempt');
@@ -164,20 +205,31 @@ export async function loadAdminSection(section: AdminSection, url: URL) {
 		const gradingScoreByQuestionId = new Map(
 			submittedAnswers.map((answer) => [answer.attemptQuestionId, answer.score])
 		);
-		const short = manualScoreSummary(subjectiveQuestions, gradingScoreByQuestionId, 'short');
-		const essay = manualScoreSummary(subjectiveQuestions, gradingScoreByQuestionId, 'essay');
+		const scores = manualScoreBreakdown(subjectiveQuestions, gradingScoreByQuestionId);
 		grading = {
 			attempt: gradingAttempt,
 			objectiveMaxScore: objectiveQuestions.reduce((sum, question) => sum + question.points, 0),
-			shortScore: short.score,
-			shortMaxScore: short.maxScore,
-			essayScore: essay.score,
-			essayMaxScore: essay.maxScore,
-			essayPassScore,
-			essayPassed: essay.score === null ? null : essay.score >= essayPassScore,
-			gradedCount: short.gradedCount + essay.gradedCount,
+			shortScore: scores.short.score,
+			shortMaxScore: scores.short.maxScore,
+			descriptiveScore: scores.descriptive.score,
+			descriptiveMaxScore: scores.descriptive.maxScore,
+			longEssayScore: scores.longEssay.score,
+			longEssayMaxScore: scores.longEssay.maxScore,
+			writingScore: scores.writing.score,
+			writingMaxScore: scores.writing.maxScore,
+			writingPassScore,
+			writingPassed:
+				scores.writing.score === null ? null : scores.writing.score >= writingPassScore,
+			gradedCount:
+				scores.short.gradedCount + scores.descriptive.gradedCount + scores.longEssay.gradedCount,
 			questions: subjectiveQuestions.map((question) => ({
 				...question,
+				manualType:
+					question.type === 'short'
+						? ('short' as const)
+						: question.id === scores.longEssayId
+							? ('longEssay' as const)
+							: ('descriptive' as const),
 				answer: answerByQuestionId.get(question.id)?.value || '',
 				score: answerByQuestionId.get(question.id)?.score ?? null
 			})),
