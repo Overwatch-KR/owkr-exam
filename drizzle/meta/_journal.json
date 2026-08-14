@@ -43,6 +43,13 @@
       "when": 1786707633323,
       "tag": "0005_careless_frightful_four",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786719434379,
+      "tag": "0006_lame_hedge_knight",
+      "breakpoints": true
     }
   ]
 }

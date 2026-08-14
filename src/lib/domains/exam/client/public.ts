@@ -4,16 +4,19 @@ import {
 	type BoundraCallOptions,
 	type BoundraTransport
 } from 'boundra';
+import { getExamStatus as runGetExamStatus } from './queries/get-exam-status';
 import { saveAnswer as runSaveAnswer } from './mutations/save-answer';
 import { startExam as runStartExam } from './mutations/start-exam';
 import { submitExam as runSubmitExam } from './mutations/submit-exam';
 import type {
+	GetExamStatusQueryInput,
 	SaveAnswerMutationInput,
 	StartExamMutationInput,
 	SubmitExamMutationInput
 } from '../shared/public';
 
 const endpoints: Record<string, string> = {
+	'get-exam-status': '/api/exam/status',
 	'start-exam': '/api/exam/start',
 	'save-answer': '/api/exam/answer',
 	'submit-exam': '/api/exam/submit'
@@ -47,6 +50,8 @@ const transport: BoundraTransport = async (request, options) => {
 
 const client = createBoundraClient(transport);
 
+export const getExamStatus = (input: GetExamStatusQueryInput, options?: BoundraCallOptions) =>
+	runGetExamStatus(client, input, options);
 export const startExam = (input: StartExamMutationInput, options?: BoundraCallOptions) =>
 	runStartExam(client, input, options);
 export const saveAnswer = (input: SaveAnswerMutationInput, options?: BoundraCallOptions) =>

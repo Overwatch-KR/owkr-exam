@@ -12,6 +12,7 @@
 		"shared": [
 			"./shared/public.ts",
 			"./shared/contracts/start-exam.ts",
+			"./shared/contracts/get-exam-status.ts",
 			"./shared/contracts/save-answer.ts",
 			"./shared/contracts/submit-exam.ts"
 		]

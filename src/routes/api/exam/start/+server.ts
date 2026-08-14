@@ -50,7 +50,7 @@ export const POST = async (e) => {
 						.select()
 						.from(attempts)
 						.where(and(eq(attempts.codeId, code.id), isNull(attempts.submittedAt)));
-					if (attempt && attempt.expiresAt <= new Date()) {
+					if (attempt && !attempt.pausedAt && attempt.expiresAt <= new Date()) {
 						return { type: 'expired' as const, attemptId: attempt.id };
 					}
 					if (!attempt) {
@@ -122,6 +122,7 @@ export const POST = async (e) => {
 						attempt: {
 							id: attempt.id,
 							expiresAt: attempt.expiresAt.toISOString(),
+							pausedAt: attempt.pausedAt?.toISOString() ?? null,
 							questions: examQuestionRows.map((question) => ({
 								id: question.id,
 								type: question.type as 'multiple' | 'short' | 'essay',

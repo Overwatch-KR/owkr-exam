@@ -1,6 +1,7 @@
-import { asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lte } from 'drizzle-orm';
 import { answers, attempts, examCodes, examQuestions, questions } from '$lib/server/schema';
 import { database } from '$lib/server/db';
+import { closeAttempt } from '$lib/server/exam';
 
 export const adminSections = ['overview', 'questions', 'question-new', 'codes', 'results'] as const;
 export type AdminSection = (typeof adminSections)[number];
@@ -36,10 +37,25 @@ function manualScoreSummary(
 	};
 }
 
+async function closeExpiredAttempts() {
+	const expired = await database()
+		.select({ id: attempts.id })
+		.from(attempts)
+		.where(
+			and(
+				isNull(attempts.submittedAt),
+				isNull(attempts.pausedAt),
+				lte(attempts.expiresAt, new Date())
+			)
+		);
+	for (const attempt of expired) await closeAttempt(attempt.id, true);
+}
+
 export async function loadAdminSection(section: AdminSection, url: URL) {
 	const db = database();
 
 	if (section === 'overview') {
+		await closeExpiredAttempts();
 		const [allAttempts, allCodes, recentCodes] = await Promise.all([
 			db.select().from(attempts).orderBy(desc(attempts.startedAt)),
 			db.select().from(examCodes),
@@ -77,6 +93,7 @@ export async function loadAdminSection(section: AdminSection, url: URL) {
 		return { section, codes: await db.select().from(examCodes).orderBy(desc(examCodes.createdAt)) };
 	}
 
+	await closeExpiredAttempts();
 	const allAttempts = await db.select().from(attempts).orderBy(desc(attempts.startedAt));
 	const scoreRows = allAttempts.length
 		? await db

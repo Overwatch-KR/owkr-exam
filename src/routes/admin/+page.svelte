@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { pushState } from '$app/navigation';
-	import { untrack } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { codeStatusLabel, questionTypeLabel } from '$lib/admin/presentation';
 	import QuestionEditor from '$lib/components/question-editor.svelte';
@@ -37,6 +37,7 @@
 	let deleteQuestionOpen = $state(false);
 	let dismissedConflictRevision = $state<number | null>(null);
 	let conflictForEditing = $state<QuestionConflict | null>(null);
+	let adminNow = $state(Date.now());
 	const actionForm = $derived((form ?? {}) as AdminForm);
 	const questionConflict = $derived((actionForm.conflict ?? null) as QuestionConflict | null);
 	const activeQuestionConflict = $derived(
@@ -45,6 +46,25 @@
 			: null
 	);
 	const partialScore = (points: number) => points / 2;
+	const formatRemaining = (expiresAt: Date, pausedAt: Date | null) => {
+		const reference = pausedAt?.getTime() ?? adminNow;
+		const remaining = Math.max(0, expiresAt.getTime() - reference);
+		const hours = Math.floor(remaining / 3_600_000);
+		const minutes = Math.floor(remaining / 60_000) % 60;
+		const seconds = Math.floor(remaining / 1000) % 60;
+		return `${hours ? `${hours}:` : ''}${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+	};
+	function setScoreInput(questionId: string, score: number) {
+		const input = document.getElementById(`score-${questionId}`) as HTMLInputElement | null;
+		if (!input) return;
+		input.value = String(score);
+		input.focus();
+	}
+
+	onMount(() => {
+		const timer = setInterval(() => (adminNow = Date.now()), 1000);
+		return () => clearInterval(timer);
+	});
 	const correctOptionIndices = (question: {
 		correctAnswer: number | null;
 		correctAnswers?: number[] | null;
@@ -813,115 +833,77 @@
 									</section>
 								{/if}
 
-								<div class="mt-6 space-y-4">
-									{#each data.grading.questions as q}
-										<article class="card p-5 sm:p-6">
-											<div class="flex items-center justify-between gap-3">
-												<p class="text-xs font-semibold text-[#087ba8]">
-													문제 {q.sortOrder} · {q.type === 'short' ? '단답형' : '서술·논술형'}
-												</p>
-												<p class="text-xs text-[#6a7684]">
-													배점 {q.points}점 · 현재 {q.score ?? '미채점'}
-												</p>
-											</div>
-											<h3 class="mt-4 text-sm leading-6 font-semibold whitespace-pre-wrap">
-												{q.content}
-											</h3>
-											<div
-												class="mt-4 min-h-20 border border-[#dfe4e9] bg-[#f7f8fa] p-4 text-sm leading-6 whitespace-pre-wrap text-[#34404d]"
-											>
-												{q.answer || '(미응답)'}
-											</div>
-											{#if q.type === 'short'}
+								<form method="POST" action="?/gradeAll" class="mt-6">
+									<input type="hidden" name="attemptId" value={data.grading.attempt.id} />
+									<div class="space-y-4">
+										{#each data.grading.questions as q}
+											<article class="card p-5 sm:p-6">
+												<div class="flex items-center justify-between gap-3">
+													<p class="text-xs font-semibold text-[#087ba8]">
+														문제 {q.sortOrder} · {q.type === 'short' ? '단답형' : '서술·논술형'}
+													</p>
+													<p class="text-xs text-[#6a7684]">
+														배점 {q.points}점 · 현재 {q.score ?? '미채점'}
+													</p>
+												</div>
+												<h3 class="mt-4 text-sm leading-6 font-semibold whitespace-pre-wrap">
+													{q.content}
+												</h3>
+												<div
+													class="mt-4 min-h-20 border border-[#dfe4e9] bg-[#f7f8fa] p-4 text-sm leading-6 whitespace-pre-wrap text-[#34404d]"
+												>
+													{q.answer || '(미응답)'}
+												</div>
 												<div
 													class="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
 												>
-													<form method="POST" action="?/grade" class="flex flex-wrap gap-2">
-														<input
-															type="hidden"
-															name="attemptId"
-															value={data.grading.attempt.id}
-														/><input type="hidden" name="questionId" value={q.id} />
+													<div class="flex flex-wrap gap-2">
 														<button
-															name="score"
-															value={q.points}
+															type="button"
 															class="btn-secondary"
-															class:border-green-700={q.score === q.points}
-															class:text-green-800={q.score === q.points}
-															>정답 · {q.points}점
-														</button>
+															onclick={() => setScoreInput(q.id, q.points)}
+															>{q.type === 'short' ? '정답' : '만점'} · {q.points}점</button
+														>
+														{#if q.type !== 'short'}
+															<button
+																type="button"
+																class="btn-secondary"
+																onclick={() => setScoreInput(q.id, partialScore(q.points))}
+																>부분 · {partialScore(q.points)}점</button
+															>
+														{/if}
 														<button
-															name="score"
-															value="0"
+															type="button"
 															class="btn-secondary"
-															class:border-red-700={q.score === 0}
-															class:text-red-800={q.score === 0}
+															onclick={() => setScoreInput(q.id, 0)}
+															>{q.type === 'short' ? '오답' : '미충족'} · 0점</button
 														>
-															오답 · 0점
-														</button>
-													</form>
-													<form method="POST" action="?/grade" class="flex items-center gap-2">
-														<input type="hidden" name="attemptId" value={data.grading.attempt.id} />
-														<input type="hidden" name="questionId" value={q.id} />
-														<label class="text-xs font-semibold" for={`score-${q.id}`}
-															>직접 입력</label
-														>
+													</div>
+													<div class="flex items-center gap-2">
+														<label class="text-xs font-semibold" for={`score-${q.id}`}>점수</label>
 														<input
 															id={`score-${q.id}`}
-															name="score"
+															name={`score-${q.id}`}
 															type="number"
 															step="0.01"
+															min="0"
 															value={q.score ?? ''}
-															required
-															class="w-20"
+															class="w-24"
 														/>
-														<button class="btn-secondary">저장</button>
-													</form>
+													</div>
 												</div>
-											{:else}
-												<div
-													class="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
-												>
-													<form method="POST" action="?/grade" class="flex flex-wrap gap-2">
-														<input
-															type="hidden"
-															name="attemptId"
-															value={data.grading.attempt.id}
-														/><input type="hidden" name="questionId" value={q.id} />
-														<button name="score" value={q.points} class="btn-secondary"
-															>만점 · {q.points}</button
-														>
-														<button
-															name="score"
-															value={partialScore(q.points)}
-															class="btn-secondary">부분 · {partialScore(q.points)}</button
-														>
-														<button name="score" value="0" class="btn-secondary">미충족 · 0</button>
-													</form>
-													<form method="POST" action="?/grade" class="flex items-center gap-2">
-														<input
-															type="hidden"
-															name="attemptId"
-															value={data.grading.attempt.id}
-														/><input type="hidden" name="questionId" value={q.id} />
-														<label class="text-xs font-semibold" for={`score-${q.id}`}
-															>직접 입력</label
-														><input
-															id={`score-${q.id}`}
-															name="score"
-															type="number"
-															step="0.01"
-															value={q.score ?? ''}
-															required
-															class="w-20"
-														/>
-														<button class="btn-secondary">저장</button>
-													</form>
-												</div>
-											{/if}
-										</article>
-									{/each}
-								</div>
+											</article>
+										{/each}
+									</div>
+									<div
+										class="border-ink mt-5 flex flex-col gap-3 border-t bg-white py-4 sm:flex-row sm:items-center sm:justify-between"
+									>
+										<p class="text-xs leading-5 text-[#6a7684]">
+											입력한 모든 점수가 한 번에 저장됩니다. 빈 점수는 기존 상태를 유지합니다.
+										</p>
+										<button class="btn">채점 점수 한 번에 저장</button>
+									</div>
+								</form>
 							</div>
 						{/if}
 
@@ -930,7 +912,7 @@
 							<span class="text-xs text-stone-500">총 {data.attempts?.length ?? 0}명</span>
 						</div>
 						<div class="border-ink overflow-x-auto border-t">
-							<table class="w-full min-w-[980px] text-left text-sm">
+							<table class="w-full min-w-[1160px] text-left text-sm">
 								<thead class="table-head">
 									<tr>
 										<th class="p-3">지원자</th>
@@ -962,7 +944,9 @@
 											<td class="p-3"
 												><span class="badge"
 													>{!a.submittedAt
-														? '응시 중'
+														? a.pausedAt
+															? '일시 중지'
+															: '응시 중'
 														: a.totalScore === null
 															? a.timedOut
 																? '시간 초과 · 채점 필요'
@@ -987,19 +971,49 @@
 													</span>
 												{/if}
 											</td>
-											<td class="p-3 text-xs"
-												>{a.submittedAt
+											<td class="p-3 text-xs">
+												{a.submittedAt
 													? Math.round((a.submittedAt.getTime() - a.startedAt.getTime()) / 60000) +
 														'분'
-													: '-'}</td
-											>
+													: `${a.pausedAt ? '중지' : '남은 시간'} ${formatRemaining(a.expiresAt, a.pausedAt)}`}
+											</td>
 											<td class="p-3">
 												{#if a.submittedAt}<a
 														href={`/admin/results?attempt=${a.id}`}
 														data-sveltekit-reload
 														class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
 														>답안 보기</a
-													>{/if}
+													>
+												{:else}
+													<div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+														<form
+															method="POST"
+															action={a.pausedAt ? '?/resumeAttempt' : '?/pauseAttempt'}
+														>
+															<input type="hidden" name="id" value={a.id} />
+															<button
+																class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
+															>
+																{a.pausedAt ? '시간 재개' : '시간 중지'}
+															</button>
+														</form>
+														<form method="POST" action="?/extendAttempt" class="flex gap-2">
+															<input type="hidden" name="id" value={a.id} />
+															<button
+																name="minutes"
+																value="5"
+																class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
+																>+5분</button
+															>
+															<button
+																name="minutes"
+																value="10"
+																class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
+																>+10분</button
+															>
+														</form>
+													</div>
+												{/if}
 												<form
 													method="POST"
 													action="?/deleteAttempt"

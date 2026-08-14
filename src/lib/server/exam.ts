@@ -34,6 +34,7 @@ export async function closeAttempt(id: string, timedOut = false) {
 		if (!attempt || attempt.submittedAt) return attempt;
 
 		const now = new Date();
+		if (timedOut && (attempt.pausedAt || attempt.expiresAt > now)) return attempt;
 		const questions = await tx.select().from(examQuestions).where(eq(examQuestions.attemptId, id));
 		const submittedAnswers = questions.length
 			? await tx
@@ -63,6 +64,7 @@ export async function closeAttempt(id: string, timedOut = false) {
 			.set({
 				submittedAt: now,
 				timedOut,
+				pausedAt: null,
 				objectiveScore,
 				totalScore: needsManualGrading ? null : objectiveScore
 			})

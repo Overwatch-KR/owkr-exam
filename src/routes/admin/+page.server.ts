@@ -5,6 +5,7 @@ import { database } from '$lib/server/db';
 import { answers, attempts, examCodes, examQuestions, questions } from '$lib/server/schema';
 import { adminSections, loadAdminSection, type AdminSection } from '$lib/server/admin-dashboard';
 import { invalidateExamConfig } from '$lib/server/exam-config';
+import { closeAttempt } from '$lib/server/exam';
 
 const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const make = () =>
@@ -146,66 +147,177 @@ export const actions = {
 			});
 		}
 	},
-	grade: async (event) => {
+	pauseAttempt: async (event) => {
+		admin(event);
+		const data = await event.request.formData();
+		const attemptId = String(data.get('id'));
+		const now = new Date();
+		const state = await database().transaction(async (tx) => {
+			const [attempt] = await tx
+				.select()
+				.from(attempts)
+				.where(eq(attempts.id, attemptId))
+				.for('update');
+			if (!attempt) return 'missing' as const;
+			if (attempt.submittedAt) return 'submitted' as const;
+			if (attempt.pausedAt) return 'paused' as const;
+			if (attempt.expiresAt <= now) return 'expired' as const;
+			await tx.update(attempts).set({ pausedAt: now }).where(eq(attempts.id, attempt.id));
+			return 'updated' as const;
+		});
+		if (state === 'missing') return fail(404, { message: '응시 기록을 찾지 못했습니다.' });
+		if (state === 'submitted') return fail(409, { message: '이미 종료된 시험입니다.' });
+		if (state === 'expired') {
+			await closeAttempt(attemptId, true);
+			return fail(409, { message: '이미 시험 시간이 종료되었습니다.' });
+		}
+		return {
+			success:
+				state === 'paused' ? '이미 일시 중지된 시험입니다.' : '시험 시간을 일시 중지했습니다.'
+		};
+	},
+	resumeAttempt: async (event) => {
+		admin(event);
+		const data = await event.request.formData();
+		const attemptId = String(data.get('id'));
+		const state = await database().transaction(async (tx) => {
+			const [attempt] = await tx
+				.select()
+				.from(attempts)
+				.where(eq(attempts.id, attemptId))
+				.for('update');
+			if (!attempt) return 'missing' as const;
+			if (attempt.submittedAt) return 'submitted' as const;
+			if (!attempt.pausedAt) return 'running' as const;
+			const now = new Date();
+			const pausedDuration = Math.max(0, now.getTime() - attempt.pausedAt.getTime());
+			await tx
+				.update(attempts)
+				.set({
+					pausedAt: null,
+					expiresAt: new Date(attempt.expiresAt.getTime() + pausedDuration)
+				})
+				.where(eq(attempts.id, attempt.id));
+			return 'updated' as const;
+		});
+		if (state === 'missing') return fail(404, { message: '응시 기록을 찾지 못했습니다.' });
+		if (state === 'submitted') return fail(409, { message: '이미 종료된 시험입니다.' });
+		return {
+			success: state === 'running' ? '이미 진행 중인 시험입니다.' : '시험 시간을 다시 시작했습니다.'
+		};
+	},
+	extendAttempt: async (event) => {
+		admin(event);
+		const data = await event.request.formData();
+		const attemptId = String(data.get('id'));
+		const minutes = Number(data.get('minutes'));
+		if (!Number.isInteger(minutes) || minutes < 1 || minutes > 180) {
+			return fail(400, { message: '추가 시간은 1분부터 180분까지 입력해 주세요.' });
+		}
+		const now = new Date();
+		const state = await database().transaction(async (tx) => {
+			const [attempt] = await tx
+				.select()
+				.from(attempts)
+				.where(eq(attempts.id, attemptId))
+				.for('update');
+			if (!attempt) return 'missing' as const;
+			if (attempt.submittedAt) return 'submitted' as const;
+			if (!attempt.pausedAt && attempt.expiresAt <= now) return 'expired' as const;
+			await tx
+				.update(attempts)
+				.set({ expiresAt: new Date(attempt.expiresAt.getTime() + minutes * 60_000) })
+				.where(eq(attempts.id, attempt.id));
+			return 'updated' as const;
+		});
+		if (state === 'missing') return fail(404, { message: '응시 기록을 찾지 못했습니다.' });
+		if (state === 'submitted') return fail(409, { message: '이미 종료된 시험입니다.' });
+		if (state === 'expired') {
+			await closeAttempt(attemptId, true);
+			return fail(409, { message: '이미 시험 시간이 종료되었습니다.' });
+		}
+		return { success: `시험 시간을 ${minutes}분 연장했습니다.` };
+	},
+	gradeAll: async (event) => {
 		admin(event);
 		const data = await event.request.formData();
 		const attemptId = String(data.get('attemptId'));
-		const questionId = String(data.get('questionId'));
-		const score = Number(data.get('score'));
 		const db = database();
 		const [attempt] = await db.select().from(attempts).where(eq(attempts.id, attemptId));
-		const [question] = await db
-			.select()
-			.from(examQuestions)
-			.where(and(eq(examQuestions.id, questionId), eq(examQuestions.attemptId, attemptId)));
-		if (!attempt?.submittedAt || !question || question.type === 'multiple') {
-			return fail(400, { message: '채점할 수 있는 답안을 찾지 못했습니다.' });
-		}
-		if (!Number.isFinite(score) || score < 0) {
-			return fail(400, { message: '점수는 0점 이상의 숫자로 입력해 주세요.' });
-		}
-
-		await db
-			.insert(answers)
-			.values({ attemptQuestionId: question.id, value: '', score })
-			.onConflictDoUpdate({
-				target: answers.attemptQuestionId,
-				set: { score, updatedAt: new Date() }
-			});
-
 		const subjectiveQuestions = (
 			await db.select().from(examQuestions).where(eq(examQuestions.attemptId, attemptId))
-		).filter((item) => item.type !== 'multiple');
-		const scoredAnswers = subjectiveQuestions.length
-			? await db
+		).filter((question) => question.type !== 'multiple');
+		if (!attempt?.submittedAt || !subjectiveQuestions.length) {
+			return fail(400, { message: '채점할 수 있는 응시 기록을 찾지 못했습니다.' });
+		}
+		const scores: Array<{ questionId: string; score: number }> = [];
+		for (const question of subjectiveQuestions) {
+			const raw = String(data.get(`score-${question.id}`) ?? '').trim();
+			if (!raw) continue;
+			const score = Number(raw);
+			if (!Number.isFinite(score) || score < 0) {
+				return fail(400, { message: `문제 ${question.sortOrder}의 점수를 확인해 주세요.` });
+			}
+			scores.push({ questionId: question.id, score });
+		}
+		if (!scores.length) return fail(400, { message: '저장할 점수를 하나 이상 입력해 주세요.' });
+
+		try {
+			await db.transaction(async (tx) => {
+				const [lockedAttempt] = await tx
+					.select()
+					.from(attempts)
+					.where(eq(attempts.id, attemptId))
+					.for('update');
+				if (!lockedAttempt?.submittedAt) throw new Error('채점할 응시 기록이 종료되지 않았습니다.');
+				for (const item of scores) {
+					await tx
+						.insert(answers)
+						.values({ attemptQuestionId: item.questionId, value: '', score: item.score })
+						.onConflictDoUpdate({
+							target: answers.attemptQuestionId,
+							set: { score: item.score, updatedAt: new Date() }
+						});
+				}
+				const scoredAnswers = await tx
 					.select()
 					.from(answers)
 					.where(
 						inArray(
 							answers.attemptQuestionId,
-							subjectiveQuestions.map((item) => item.id)
+							subjectiveQuestions.map((question) => question.id)
 						)
-					)
-			: [];
-		const scoreByQuestionId = new Map(
-			scoredAnswers.map((answer) => [answer.attemptQuestionId, answer.score])
-		);
-		const gradingComplete = subjectiveQuestions.every(
-			(item) =>
-				scoreByQuestionId.get(item.id) !== null && scoreByQuestionId.get(item.id) !== undefined
-		);
-		const subjectiveScore = gradingComplete
-			? subjectiveQuestions.reduce((sum, item) => sum + (scoreByQuestionId.get(item.id) || 0), 0)
-			: null;
-		await db
-			.update(attempts)
-			.set({
-				subjectiveScore,
-				totalScore: subjectiveScore === null ? null : attempt.objectiveScore + subjectiveScore
-			})
-			.where(eq(attempts.id, attemptId));
-
-		redirect(303, `/admin/results?attempt=${encodeURIComponent(attemptId)}`);
+					);
+				const scoreByQuestionId = new Map(
+					scoredAnswers.map((answer) => [answer.attemptQuestionId, answer.score])
+				);
+				const gradingComplete = subjectiveQuestions.every(
+					(question) =>
+						scoreByQuestionId.get(question.id) !== null && scoreByQuestionId.has(question.id)
+				);
+				const subjectiveScore = gradingComplete
+					? subjectiveQuestions.reduce(
+							(sum, question) => sum + (scoreByQuestionId.get(question.id) ?? 0),
+							0
+						)
+					: null;
+				await tx
+					.update(attempts)
+					.set({
+						subjectiveScore,
+						totalScore:
+							subjectiveScore === null ? null : lockedAttempt.objectiveScore + subjectiveScore
+					})
+					.where(eq(attempts.id, attemptId));
+			});
+		} catch (cause) {
+			console.error('[admin:gradeAll] failed', {
+				attemptId,
+				error: cause instanceof Error ? cause.message : String(cause)
+			});
+			return fail(500, { message: '채점 점수를 저장하지 못했습니다. 다시 시도해 주세요.' });
+		}
+		return { success: `${scores.length}개 문항의 채점 점수를 저장했습니다.` };
 	},
 	code: async (event) => {
 		admin(event);

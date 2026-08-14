@@ -4,6 +4,7 @@
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import {
 		examErrorMessage,
+		getExamStatus,
 		saveAnswer,
 		startExam,
 		submitExam,
@@ -28,6 +29,8 @@
 	let remaining = $state(0);
 	let confirm = $state(false);
 	let submitting = $state(false);
+	let statusSyncing = $state(false);
+	let serverTimeOffset = $state(0);
 	let q = $derived(attempt?.questions[index]);
 	let answeredCount = $derived(
 		attempt?.questions.filter((item) => values[item.id]?.trim()).length ?? 0
@@ -38,10 +41,11 @@
 	onMount(() => {
 		const timer = setInterval(() => {
 			if (attempt) {
-				remaining = Math.max(0, new Date(attempt.expiresAt).getTime() - Date.now());
-				if (!remaining) submit(true);
+				updateRemaining();
+				if (!attempt.pausedAt && !remaining) submit(true);
 			}
 		}, 1000);
+		const statusTimer = setInterval(() => void syncStatus(), 3000);
 		const onShow = (e: PageTransitionEvent) => {
 			if (e.persisted) location.replace('/exam');
 		};
@@ -49,7 +53,7 @@
 		let nextShortcutPressed = false;
 		const onKeydown = (event: KeyboardEvent) => {
 			if (event.key === 'Escape' && confirm) confirm = false;
-			if (!attempt || attempt.submittedAt || confirm) return;
+			if (!attempt || attempt.submittedAt || attempt.pausedAt || confirm) return;
 			const isEnter = event.key === 'Enter' || event.code === 'NumpadEnter';
 			if (isEnter && event.shiftKey) {
 				event.preventDefault();
@@ -85,6 +89,7 @@
 		addEventListener('blur', onBlur);
 		return () => {
 			clearInterval(timer);
+			clearInterval(statusTimer);
 			clearPendingSaveTimers();
 			removeEventListener('pageshow', onShow);
 			removeEventListener('popstate', onPop);
@@ -118,7 +123,8 @@
 			values = Object.fromEntries(
 				started.questions.map((question) => [question.id, question.answer])
 			);
-			remaining = new Date(started.expiresAt).getTime() - Date.now();
+			serverTimeOffset = 0;
+			updateRemaining();
 		} catch (error) {
 			message = examErrorMessage(error, '올바른 6자리 코드를 입력해 주세요.');
 		} finally {
@@ -132,6 +138,7 @@
 	const failedAnswerIds = new Set<string>();
 
 	function save(id: string) {
+		if (attempt?.pausedAt) return;
 		dirtyAnswerIds.add(id);
 		clearTimeout(timers[id]);
 		timers[id] = setTimeout(() => {
@@ -181,11 +188,11 @@
 	}
 
 	function goNext() {
-		if (attempt && index < attempt.questions.length - 1) index += 1;
+		if (attempt && !attempt.pausedAt && index < attempt.questions.length - 1) index += 1;
 	}
 
 	function selectChoice(optionIndex: number) {
-		if (!q || q.type !== 'multiple' || optionIndex >= q.options.length) return;
+		if (!q || attempt?.pausedAt || q.type !== 'multiple' || optionIndex >= q.options.length) return;
 		if (q.allowsMultipleAnswers) {
 			const selected = selectedChoiceIndices(values[q.id]);
 			const next = selected.includes(optionIndex)
@@ -223,12 +230,53 @@
 			};
 			confirm = false;
 		} catch (error) {
+			if (timeout) {
+				await syncStatus();
+				if (attempt?.submittedAt || attempt?.pausedAt || remaining > 0) return;
+			}
 			toast.error(
 				saveError ||
 					examErrorMessage(error, '시험을 제출하지 못했습니다. 잠시 후 다시 시도해 주세요.')
 			);
 		} finally {
 			submitting = false;
+		}
+	}
+
+	function updateRemaining() {
+		if (!attempt) return;
+		const reference = attempt.pausedAt
+			? new Date(attempt.pausedAt).getTime()
+			: Date.now() + serverTimeOffset;
+		remaining = Math.max(0, new Date(attempt.expiresAt).getTime() - reference);
+	}
+
+	async function syncStatus() {
+		if (!attempt || attempt.submittedAt || statusSyncing) return;
+		statusSyncing = true;
+		try {
+			const wasPaused = Boolean(attempt.pausedAt);
+			const status = await getExamStatus({ attemptId: attempt.id });
+			serverTimeOffset = new Date(status.serverNow).getTime() - Date.now();
+			attempt = {
+				...attempt,
+				expiresAt: status.expiresAt,
+				pausedAt: status.pausedAt
+			};
+			updateRemaining();
+			if (!wasPaused && status.pausedAt) clearPendingSaveTimers();
+			if (wasPaused && !status.pausedAt && dirtyAnswerIds.size) {
+				void flushPendingAnswers().catch(() => undefined);
+			}
+			if (status.submittedAt) {
+				const submitted = await submitExam({ attemptId: attempt.id, timeout: status.timedOut });
+				attempt = { ...attempt, ...submitted };
+				confirm = false;
+			}
+		} catch {
+			// 일시적인 상태 확인 실패는 다음 주기에서 다시 시도합니다.
+		} finally {
+			statusSyncing = false;
 		}
 	}
 </script>
@@ -373,8 +421,12 @@
 			<div class="mx-auto flex h-16 max-w-[1320px] items-center justify-between px-5 sm:px-8">
 				<span class="wordmark">OWKR EXAM</span>
 				<div class="text-right">
-					<p class="text-[10px] font-semibold tracking-[0.12em] text-[#6a7684]">남은 시간</p>
-					<p class="font-mono text-xl font-bold text-[#087ba8] tabular-nums">{fmt(remaining)}</p>
+					<p class="text-[10px] font-semibold tracking-[0.12em] text-[#6a7684]">
+						{attempt.pausedAt ? '시험 일시 중지' : '남은 시간'}
+					</p>
+					<p class="font-mono text-xl font-bold text-[#087ba8] tabular-nums">
+						{attempt.pausedAt ? '중지됨' : fmt(remaining)}
+					</p>
 				</div>
 			</div>
 		</header>
@@ -390,6 +442,18 @@
 						{saveError}
 					</p>{/if}
 			</div>
+			{#if attempt.pausedAt}
+				<div
+					role="status"
+					aria-live="polite"
+					class="mb-5 border border-[#b8d8e5] bg-[#effbff] px-4 py-3 text-sm text-[#34404d]"
+				>
+					<p class="font-bold text-[#087ba8]">관리자가 시험 시간을 일시 중지했습니다.</p>
+					<p class="mt-1 text-xs leading-5">
+						남은 시간은 줄어들지 않으며, 재개될 때까지 답안을 수정할 수 없습니다.
+					</p>
+				</div>
+			{/if}
 			<div class="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
 				<aside class="h-fit border border-[#bfd4df] bg-[#eaf7fb] p-4 lg:sticky lg:top-5">
 					<div class="mb-4 flex items-baseline justify-between">
@@ -404,6 +468,7 @@
 								type="button"
 								aria-label={`${i + 1}번 문제${values[item.id]?.trim() ? ', 답변 있음' : ', 미응답'}`}
 								aria-current={i === index ? 'step' : undefined}
+								disabled={Boolean(attempt.pausedAt)}
 								onclick={() => (index = i)}
 								class="h-9 border text-xs font-semibold transition-colors {i === index
 									? 'border-[#087ba8] bg-[#087ba8] text-white'
@@ -430,7 +495,7 @@
 							? 'btn mt-3 w-full ring-2 ring-[#087ba8]/20 ring-offset-2'
 							: 'btn mt-5 w-full'}
 						aria-describedby={allAnswered ? 'all-answered' : undefined}
-						disabled={submitting}
+						disabled={submitting || Boolean(attempt.pausedAt)}
 						onclick={() => (confirm = true)}>시험 제출</button
 					>
 				</aside>
@@ -459,6 +524,7 @@
 													type="checkbox"
 													name={q.id}
 													value={String(i)}
+													disabled={Boolean(attempt.pausedAt)}
 													checked={selectedChoiceIndices(values[q.id]).includes(i)}
 													onchange={() => selectChoice(i)}
 													class="mt-0.5"
@@ -468,6 +534,7 @@
 													type="radio"
 													name={q.id}
 													value={String(i)}
+													disabled={Boolean(attempt.pausedAt)}
 													bind:group={values[q.id]}
 													onchange={() => save(q.id)}
 													class="mt-0.5"
@@ -486,6 +553,7 @@
 									aria-label={`${index + 1}번 문제 답안`}
 									class="mt-8 min-h-52 w-full leading-7"
 									bind:value={values[q.id]}
+									disabled={Boolean(attempt.pausedAt)}
 									oninput={() => save(q.id)}
 									placeholder={q.type === 'short'
 										? '답변을 입력하세요.'
@@ -494,13 +562,13 @@
 								<button
 									type="button"
 									class="btn-secondary"
-									disabled={index === 0}
+									disabled={index === 0 || Boolean(attempt.pausedAt)}
 									onclick={() => index--}>← 이전 문제</button
 								>
 								<button
 									type="button"
 									class="btn-secondary"
-									disabled={index === attempt.questions.length - 1}
+									disabled={index === attempt.questions.length - 1 || Boolean(attempt.pausedAt)}
 									onclick={goNext}
 									>다음 문제 →
 								</button>

@@ -62,6 +62,9 @@ export const POST = async (e) => {
 							attempt.timedOut ? '시험 시간이 초과되었습니다.' : '이미 제출된 시험입니다.'
 						);
 					}
+					if (attempt.pausedAt) {
+						throw new ExamRequestError(409, '관리자가 시험 시간을 일시 중지했습니다.');
+					}
 					if (attempt.expiresAt <= new Date()) {
 						return { expiredAttemptId: attempt.id };
 					}
