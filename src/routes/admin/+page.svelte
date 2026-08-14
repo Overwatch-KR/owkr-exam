@@ -3,6 +3,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { codeStatusLabel, questionTypeLabel } from '$lib/admin/presentation';
+	import AdminBreadcrumbs from '$lib/components/admin-breadcrumbs.svelte';
 	import QuestionEditor from '$lib/components/question-editor.svelte';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 
@@ -27,6 +28,12 @@
 		conflict?: QuestionConflict;
 	};
 	type AdminSection = 'overview' | 'results' | 'codes' | 'questions' | 'question-new';
+	type AdminBreadcrumbItem = {
+		label: string;
+		href?: string;
+		reload?: boolean;
+		onclick?: (event: MouseEvent) => void;
+	};
 
 	let { data: initialData, form } = $props();
 	let data = $state(untrack(() => initialData));
@@ -128,6 +135,35 @@
 		data = { ...data, selectedQuestion: null } as typeof initialData;
 		pushState('/admin/questions', {});
 	}
+
+	const breadcrumbs = $derived.by((): AdminBreadcrumbItem[] => {
+		const root = { label: '시험 관리', href: '/admin/overview', reload: true };
+		if (tab === 'overview') return [root, { label: '개요' }];
+		if (tab === 'codes') return [root, { label: '응시 코드' }];
+		if (tab === 'question-new') {
+			return [
+				root,
+				{ label: '문제 관리', href: '/admin/questions', reload: true },
+				{ label: '새 문제 등록' }
+			];
+		}
+		if (tab === 'questions') {
+			return data.selectedQuestion
+				? [
+						root,
+						{ label: '문제 관리', href: '/admin/questions', onclick: closeQuestion },
+						{ label: `문제 ${data.selectedQuestion.sortOrder}` }
+					]
+				: [root, { label: '문제 관리' }];
+		}
+		return data.grading
+			? [
+					root,
+					{ label: '응시 결과', href: '/admin/results', reload: true },
+					{ label: `${data.grading.attempt.displayName} 답안 채점` }
+				]
+			: [root, { label: '응시 결과' }];
+	});
 
 	function continueEditingConflict(conflict: QuestionConflict) {
 		conflictForEditing = conflict;
@@ -244,8 +280,9 @@
 			</nav>
 
 			<div class="min-w-0">
+				<AdminBreadcrumbs items={breadcrumbs} />
 				{#if tab === 'overview' && data.overview}
-					<section class="py-8">
+					<section class="pt-5 pb-8">
 						<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 							<div class="card p-5">
 								<p class="text-xs font-semibold text-[#6a7684]">채점 필요</p>
@@ -357,7 +394,7 @@
 						</div>
 					</section>
 				{:else if tab === 'question-new'}
-					<section class="py-8">
+					<section class="pt-5 pb-8">
 						<div class="mb-5 max-w-3xl">
 							<h2 class="text-lg font-bold">새 문제 등록</h2>
 							<p class="mt-1 text-xs leading-5 text-stone-500">
@@ -368,257 +405,239 @@
 						<QuestionEditor action="?/question" />
 					</section>
 				{:else if tab === 'questions'}
-					<section class="py-8">
-						<div class="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-							{#if data.selectedQuestion}
-								<article
-									id="question-detail"
-									class="border-line scroll-mt-5 border-t-2 border-t-[#111820] bg-white px-5 pt-5 pb-6 sm:px-6 lg:sticky lg:top-6 lg:order-2 lg:h-fit"
-								>
-									<div class="flex flex-wrap items-center justify-between gap-3">
-										<div class="flex flex-wrap items-center gap-2">
-											<span class="font-mono text-xs font-bold text-[#087ba8]"
-												>문제 {data.selectedQuestion.sortOrder}</span
-											>
-											<span class="badge">{questionTypeLabel(data.selectedQuestion.type)}</span>
-											{#if !data.selectedQuestion.active}<span
-													class="text-xs font-semibold text-stone-500">비활성</span
-												>{/if}
+					<section class="pt-5 pb-8">
+						{#if data.selectedQuestion}
+							<article
+								id="question-detail"
+								class="border-line scroll-mt-5 border-t-2 border-t-[#111820] bg-white px-5 pt-5 pb-6 sm:px-6"
+							>
+								<div class="flex flex-wrap items-center justify-between gap-3">
+									<div class="flex flex-wrap items-center gap-2">
+										<span class="font-mono text-xs font-bold text-[#087ba8]"
+											>문제 {data.selectedQuestion.sortOrder}</span
+										>
+										<span class="badge">{questionTypeLabel(data.selectedQuestion.type)}</span>
+										{#if !data.selectedQuestion.active}<span
+												class="text-xs font-semibold text-stone-500">비활성</span
+											>{/if}
+									</div>
+									<div class="flex items-center gap-2">
+										<button
+											type="button"
+											class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
+											onclick={() => {
+												editingQuestion = !editingQuestion;
+												if (!editingQuestion) conflictForEditing = null;
+											}}>{editingQuestion ? '수정 취소' : '문제 수정'}</button
+										>
+										<button
+											type="button"
+											onclick={() => (deleteQuestionOpen = true)}
+											class="h-8 border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+										>
+											문제 삭제
+										</button>
+									</div>
+								</div>
+								<p class="text-muted mt-3 text-xs">
+									마지막 수정 · {data.selectedQuestion.updatedByName ||
+										'수정 이력 없음'}{#if data.selectedQuestion.updatedByName}
+										· {data.selectedQuestion.updatedAt.toLocaleString('ko-KR')}{/if}
+								</p>
+								{#if editingQuestion}
+									<div class="mt-5">
+										<QuestionEditor
+											action="?/updateQuestion"
+											question={conflictForEditing?.latest ?? data.selectedQuestion}
+											draft={conflictForEditing?.draft ?? null}
+											submitLabel="수정 내용 저장"
+										/>
+									</div>
+								{:else}
+									<h2
+										class="mt-5 text-lg leading-8 font-bold tracking-[-.02em] whitespace-pre-wrap"
+									>
+										{data.selectedQuestion.content}
+									</h2>
+									<div
+										class="border-line bg-line mt-5 grid grid-cols-2 gap-px border text-sm sm:grid-cols-4"
+									>
+										<div class="bg-[#f7f8fa] p-3">
+											<p class="text-muted text-[10px] font-semibold">유형</p>
+											<p class="mt-1 font-semibold">
+												{questionTypeLabel(data.selectedQuestion.type)}
+											</p>
 										</div>
-										<div class="flex w-full flex-wrap items-center justify-between gap-3">
-											<div class="flex items-center gap-2">
-												<button
-													type="button"
-													class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
-													onclick={() => {
-														editingQuestion = !editingQuestion;
-														if (!editingQuestion) conflictForEditing = null;
-													}}>{editingQuestion ? '수정 취소' : '문제 수정'}</button
-												>
-												<a
-													href="/admin/questions"
-													onclick={closeQuestion}
-													class="btn-secondary h-8 px-3 text-xs">상세 닫기</a
-												>
-											</div>
-											<button
-												type="button"
-												onclick={() => (deleteQuestionOpen = true)}
-												class="h-8 border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-700 transition hover:bg-red-100"
-											>
-												문제 삭제
-											</button>
+										<div class="bg-[#f7f8fa] p-3">
+											<p class="text-muted text-[10px] font-semibold">배점</p>
+											<p class="mt-1 font-semibold">{data.selectedQuestion.points}점</p>
+										</div>
+										<div class="bg-[#f7f8fa] p-3">
+											<p class="text-muted text-[10px] font-semibold">상태</p>
+											<p class="mt-1 font-semibold">
+												{data.selectedQuestion.active ? '사용 중' : '비활성'}
+											</p>
+										</div>
+										<div class="bg-[#f7f8fa] p-3">
+											<p class="text-muted text-[10px] font-semibold">등록 시각</p>
+											<p class="mt-1 text-xs font-semibold">
+												{data.selectedQuestion.createdAt.toLocaleString('ko-KR')}
+											</p>
 										</div>
 									</div>
-									<p class="text-muted mt-3 text-xs">
-										마지막 수정 · {data.selectedQuestion.updatedByName ||
-											'수정 이력 없음'}{#if data.selectedQuestion.updatedByName}
-											· {data.selectedQuestion.updatedAt.toLocaleString('ko-KR')}{/if}
-									</p>
-									{#if editingQuestion}
-										<div class="mt-5">
-											<QuestionEditor
-												action="?/updateQuestion"
-												question={conflictForEditing?.latest ?? data.selectedQuestion}
-												draft={conflictForEditing?.draft ?? null}
-												submitLabel="수정 내용 저장"
-											/>
+									{#if data.selectedQuestion.type === 'multiple' && data.selectedQuestion.options?.length}
+										<div class="mt-6">
+											<p class="text-xs font-bold text-[#34404d]">보기 및 정답</p>
+											<ol class="mt-3 space-y-2">
+												{#each data.selectedQuestion.options as option, index}
+													<li
+														class="flex items-start gap-3 border px-4 py-3 text-sm leading-6"
+														class:border-[#087ba8]={correctOptionIndices(
+															data.selectedQuestion
+														).includes(index)}
+														class:bg-[#effbff]={correctOptionIndices(
+															data.selectedQuestion
+														).includes(index)}
+														class:border-line={!correctOptionIndices(
+															data.selectedQuestion
+														).includes(index)}
+													>
+														<span
+															class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full font-mono text-xs font-bold"
+															class:bg-[#087ba8]={correctOptionIndices(
+																data.selectedQuestion
+															).includes(index)}
+															class:text-white={correctOptionIndices(
+																data.selectedQuestion
+															).includes(index)}
+															class:text-[#087ba8]={!correctOptionIndices(
+																data.selectedQuestion
+															).includes(index)}>{index + 1}</span
+														>
+														<span class="flex-1">{option}</span>
+														{#if correctOptionIndices(data.selectedQuestion).includes(index)}
+															<span
+																class="inline-flex shrink-0 items-center gap-1 rounded-sm bg-[#087ba8] px-2 py-1 text-[10px] leading-none font-bold text-white"
+															>
+																<svg
+																	viewBox="0 0 12 12"
+																	class="h-3 w-3"
+																	fill="none"
+																	aria-hidden="true"
+																>
+																	<path
+																		d="m2.25 6.1 2.15 2.15 5.35-5.1"
+																		stroke="currentColor"
+																		stroke-width="1.7"
+																		stroke-linecap="round"
+																		stroke-linejoin="round"
+																	/>
+																</svg>
+																정답
+															</span>
+														{/if}
+													</li>
+												{/each}
+											</ol>
 										</div>
 									{:else}
-										<h2
-											class="mt-5 text-lg leading-8 font-bold tracking-[-.02em] whitespace-pre-wrap"
+										<p
+											class="mt-5 border-l-2 border-[#087ba8] bg-[#effbff] px-3 py-2 text-xs leading-5 text-[#34404d]"
 										>
-											{data.selectedQuestion.content}
-										</h2>
-										<div
-											class="border-line bg-line mt-5 grid grid-cols-2 gap-px border text-sm sm:grid-cols-4"
-										>
-											<div class="bg-[#f7f8fa] p-3">
-												<p class="text-muted text-[10px] font-semibold">유형</p>
-												<p class="mt-1 font-semibold">
-													{questionTypeLabel(data.selectedQuestion.type)}
-												</p>
-											</div>
-											<div class="bg-[#f7f8fa] p-3">
-												<p class="text-muted text-[10px] font-semibold">배점</p>
-												<p class="mt-1 font-semibold">{data.selectedQuestion.points}점</p>
-											</div>
-											<div class="bg-[#f7f8fa] p-3">
-												<p class="text-muted text-[10px] font-semibold">상태</p>
-												<p class="mt-1 font-semibold">
-													{data.selectedQuestion.active ? '사용 중' : '비활성'}
-												</p>
-											</div>
-											<div class="bg-[#f7f8fa] p-3">
-												<p class="text-muted text-[10px] font-semibold">등록 시각</p>
-												<p class="mt-1 text-xs font-semibold">
-													{data.selectedQuestion.createdAt.toLocaleString('ko-KR')}
-												</p>
-											</div>
-										</div>
-										{#if data.selectedQuestion.type === 'multiple' && data.selectedQuestion.options?.length}
-											<div class="mt-6">
-												<p class="text-xs font-bold text-[#34404d]">보기 및 정답</p>
-												<ol class="mt-3 space-y-2">
-													{#each data.selectedQuestion.options as option, index}
-														<li
-															class="flex items-start gap-3 border px-4 py-3 text-sm leading-6"
-															class:border-[#087ba8]={correctOptionIndices(
-																data.selectedQuestion
-															).includes(index)}
-															class:bg-[#effbff]={correctOptionIndices(
-																data.selectedQuestion
-															).includes(index)}
-															class:border-line={!correctOptionIndices(
-																data.selectedQuestion
-															).includes(index)}
-														>
-															<span
-																class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full font-mono text-xs font-bold"
-																class:bg-[#087ba8]={correctOptionIndices(
-																	data.selectedQuestion
-																).includes(index)}
-																class:text-white={correctOptionIndices(
-																	data.selectedQuestion
-																).includes(index)}
-																class:text-[#087ba8]={!correctOptionIndices(
-																	data.selectedQuestion
-																).includes(index)}>{index + 1}</span
-															>
-															<span class="flex-1">{option}</span>
-															{#if correctOptionIndices(data.selectedQuestion).includes(index)}
-																<span
-																	class="inline-flex shrink-0 items-center gap-1 rounded-sm bg-[#087ba8] px-2 py-1 text-[10px] leading-none font-bold text-white"
-																>
-																	<svg
-																		viewBox="0 0 12 12"
-																		class="h-3 w-3"
-																		fill="none"
-																		aria-hidden="true"
-																	>
-																		<path
-																			d="m2.25 6.1 2.15 2.15 5.35-5.1"
-																			stroke="currentColor"
-																			stroke-width="1.7"
-																			stroke-linecap="round"
-																			stroke-linejoin="round"
-																		/>
-																	</svg>
-																	정답
-																</span>
-															{/if}
-														</li>
-													{/each}
-												</ol>
-											</div>
-										{:else}
-											<p
-												class="mt-5 border-l-2 border-[#087ba8] bg-[#effbff] px-3 py-2 text-xs leading-5 text-[#34404d]"
-											>
-												이 문제는 관리자가 응시자의 답안을 직접 채점합니다.
-											</p>
-										{/if}
+											이 문제는 관리자가 응시자의 답안을 직접 채점합니다.
+										</p>
 									{/if}
-									<AlertDialog.Root bind:open={deleteQuestionOpen}>
+								{/if}
+								<AlertDialog.Root bind:open={deleteQuestionOpen}>
+									<AlertDialog.Content
+										class="max-w-md rounded-lg bg-white p-6 shadow-[0_24px_64px_rgba(17,24,32,0.28)]"
+									>
+										<AlertDialog.Header class="place-items-start text-left">
+											<AlertDialog.Title class="text-lg font-bold"
+												>문제를 삭제할까요?</AlertDialog.Title
+											>
+											<AlertDialog.Description class="mt-2 text-sm leading-6 text-[#6a7684]">
+												{data.selectedQuestion.sortOrder}번은 시험에서 삭제됩니다.<br />
+												이미 시작한 응시자의 문제 사본과 채점 결과는 유지됩니다.
+											</AlertDialog.Description>
+										</AlertDialog.Header>
+										<form id="delete-question-form" method="POST" action="?/deleteQuestion">
+											<input type="hidden" name="id" value={data.selectedQuestion.id} />
+										</form>
+										<div class="mt-7 flex justify-end gap-2">
+											<AlertDialog.Cancel class="btn-secondary">취소</AlertDialog.Cancel>
+											<button
+												type="submit"
+												form="delete-question-form"
+												class="btn bg-red-700 hover:bg-red-800"
+											>
+												삭제하기
+											</button>
+										</div>
+									</AlertDialog.Content>
+								</AlertDialog.Root>
+								{#if activeQuestionConflict}
+									<AlertDialog.Root open>
 										<AlertDialog.Content
-											class="max-w-md rounded-lg bg-white p-6 shadow-[0_24px_64px_rgba(17,24,32,0.28)]"
+											class="max-w-2xl rounded-lg bg-white p-0 shadow-[0_24px_64px_rgba(17,24,32,0.28)]"
 										>
-											<AlertDialog.Header class="place-items-start text-left">
-												<AlertDialog.Title class="text-lg font-bold"
-													>문제를 삭제할까요?</AlertDialog.Title
+											<div class="border-b border-[#e2e7ec] px-6 py-5">
+												<AlertDialog.Title class="text-lg font-bold">저장 충돌</AlertDialog.Title>
+												<AlertDialog.Description
+													class="mt-2 max-w-xl text-sm leading-6 text-[#667788]"
 												>
-												<AlertDialog.Description class="mt-2 text-sm leading-6 text-[#6a7684]">
-													{data.selectedQuestion.sortOrder}번은 시험에서 삭제됩니다.<br />
-													이미 시작한 응시자의 문제 사본과 채점 결과는 유지됩니다.
+													다른 관리자가 이 문제를 먼저 저장했습니다. 작성한 내용은 유지되어 있으며,
+													아래에서 두 버전을 비교한 뒤 선택할 수 있습니다.
 												</AlertDialog.Description>
-											</AlertDialog.Header>
-											<form id="delete-question-form" method="POST" action="?/deleteQuestion">
-												<input type="hidden" name="id" value={data.selectedQuestion.id} />
-											</form>
-											<div class="mt-7 flex justify-end gap-2">
-												<AlertDialog.Cancel class="btn-secondary">취소</AlertDialog.Cancel>
-												<button
-													type="submit"
-													form="delete-question-form"
-													class="btn bg-red-700 hover:bg-red-800"
+											</div>
+											<div class="grid gap-px bg-[#e2e7ec] sm:grid-cols-2">
+												<section class="min-w-0 bg-[#f8fafb] p-5">
+													<p class="text-xs font-bold text-[#34404d]">최신 저장본</p>
+													<p class="mt-1 text-xs text-[#6a7684]">
+														{questionTypeLabel(activeQuestionConflict.latest.type)} · {activeQuestionConflict
+															.latest.points}점
+													</p>
+													<p
+														class="mt-4 max-h-44 overflow-y-auto text-sm leading-6 whitespace-pre-wrap text-[#34404d]"
+													>
+														{activeQuestionConflict.latest.content}
+													</p>
+												</section>
+												<section class="min-w-0 bg-white p-5">
+													<p class="text-xs font-bold text-[#087ba8]">내가 작성한 내용</p>
+													<p class="mt-1 text-xs text-[#6a7684]">
+														{questionTypeLabel(activeQuestionConflict.draft.type)} · {activeQuestionConflict
+															.draft.points}점
+													</p>
+													<p
+														class="mt-4 max-h-44 overflow-y-auto text-sm leading-6 whitespace-pre-wrap text-[#34404d]"
+													>
+														{activeQuestionConflict.draft.content}
+													</p>
+												</section>
+											</div>
+											<div
+												class="flex flex-col-reverse gap-2 border-t border-[#e2e7ec] px-6 py-4 sm:flex-row sm:justify-end"
+											>
+												<AlertDialog.Action
+													class="btn-secondary"
+													onclick={() => applyLatestQuestion(activeQuestionConflict)}
 												>
-													삭제하기
-												</button>
+													최신 저장본 적용
+												</AlertDialog.Action>
+												<AlertDialog.Action
+													class="btn"
+													onclick={() => continueEditingConflict(activeQuestionConflict)}
+												>
+													내 변경 계속 수정
+												</AlertDialog.Action>
 											</div>
 										</AlertDialog.Content>
 									</AlertDialog.Root>
-									{#if activeQuestionConflict}
-										<AlertDialog.Root open>
-											<AlertDialog.Content
-												class="max-w-2xl rounded-lg bg-white p-0 shadow-[0_24px_64px_rgba(17,24,32,0.28)]"
-											>
-												<div class="border-b border-[#e2e7ec] px-6 py-5">
-													<AlertDialog.Title class="text-lg font-bold">저장 충돌</AlertDialog.Title>
-													<AlertDialog.Description
-														class="mt-2 max-w-xl text-sm leading-6 text-[#667788]"
-													>
-														다른 관리자가 이 문제를 먼저 저장했습니다. 작성한 내용은 유지되어
-														있으며, 아래에서 두 버전을 비교한 뒤 선택할 수 있습니다.
-													</AlertDialog.Description>
-												</div>
-												<div class="grid gap-px bg-[#e2e7ec] sm:grid-cols-2">
-													<section class="min-w-0 bg-[#f8fafb] p-5">
-														<p class="text-xs font-bold text-[#34404d]">최신 저장본</p>
-														<p class="mt-1 text-xs text-[#6a7684]">
-															{questionTypeLabel(activeQuestionConflict.latest.type)} · {activeQuestionConflict
-																.latest.points}점
-														</p>
-														<p
-															class="mt-4 max-h-44 overflow-y-auto text-sm leading-6 whitespace-pre-wrap text-[#34404d]"
-														>
-															{activeQuestionConflict.latest.content}
-														</p>
-													</section>
-													<section class="min-w-0 bg-white p-5">
-														<p class="text-xs font-bold text-[#087ba8]">내가 작성한 내용</p>
-														<p class="mt-1 text-xs text-[#6a7684]">
-															{questionTypeLabel(activeQuestionConflict.draft.type)} · {activeQuestionConflict
-																.draft.points}점
-														</p>
-														<p
-															class="mt-4 max-h-44 overflow-y-auto text-sm leading-6 whitespace-pre-wrap text-[#34404d]"
-														>
-															{activeQuestionConflict.draft.content}
-														</p>
-													</section>
-												</div>
-												<div
-													class="flex flex-col-reverse gap-2 border-t border-[#e2e7ec] px-6 py-4 sm:flex-row sm:justify-end"
-												>
-													<AlertDialog.Action
-														class="btn-secondary"
-														onclick={() => applyLatestQuestion(activeQuestionConflict)}
-													>
-														최신 저장본 적용
-													</AlertDialog.Action>
-													<AlertDialog.Action
-														class="btn"
-														onclick={() => continueEditingConflict(activeQuestionConflict)}
-													>
-														내 변경 계속 수정
-													</AlertDialog.Action>
-												</div>
-											</AlertDialog.Content>
-										</AlertDialog.Root>
-									{/if}
-								</article>
-							{:else}
-								<aside
-									class="border-line hidden min-h-[340px] bg-white p-6 lg:order-2 lg:flex lg:flex-col lg:justify-center"
-								>
-									<p class="text-sm font-bold">문제를 선택하세요</p>
-									<p class="text-muted mt-2 text-sm leading-6">
-										왼쪽 목록에서 문제를 선택하면 내용과 보기, 수정 기능을 이곳에서 확인할 수
-										있습니다.
-									</p>
-								</aside>
-							{/if}
-							<div class="border-line bg-white p-5 sm:p-6 lg:order-1">
+								{/if}
+							</article>
+						{:else}
+							<div class="border-line bg-white p-5 sm:p-6">
 								<div class="mb-4 flex items-baseline justify-between">
 									<h2 class="text-lg font-bold">등록된 문제</h2>
 									<span class="text-xs text-stone-500">총 {data.questions?.length ?? 0}문항</span>
@@ -659,10 +678,10 @@
 									</table>
 								</div>
 							</div>
-						</div>
+						{/if}
 					</section>
 				{:else if tab === 'codes'}
-					<section class="grid gap-10 py-8 lg:grid-cols-[330px_1fr]">
+					<section class="grid gap-10 pt-5 pb-8 lg:grid-cols-[330px_1fr]">
 						<form method="POST" action="?/code" class="border-ink border-t-2 pt-4">
 							<h2 class="text-lg font-bold">응시 코드 발급</h2>
 							<p class="mt-1 text-xs leading-5 text-stone-500">
@@ -724,18 +743,12 @@
 						</div>
 					</section>
 				{:else}
-					<section class="py-8">
+					<section class="pt-5 pb-8">
 						{#if data.grading}
-							<div class="border-ink mb-10 border-t-2 pt-5">
+							<div class="border-ink border-t-2 pt-5">
 								<div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
 									<div>
-										<a
-											href="/admin/results"
-											data-sveltekit-reload
-											class="px-2 py-2 text-xs font-semibold text-[#087ba8] hover:underline"
-											>← 응시자 목록</a
-										>
-										<h2 class="mt-4 text-2xl font-bold tracking-[-.03em]">
+										<h2 class="text-2xl font-bold tracking-[-.03em]">
 											{data.grading.attempt.displayName}
 											답안 채점
 										</h2>
@@ -922,141 +935,142 @@
 									</div>
 								</form>
 							</div>
-						{/if}
-
-						<div class="mb-3 flex items-baseline justify-between">
-							<h2 class="text-lg font-bold">응시 결과</h2>
-							<span class="text-xs text-stone-500">총 {data.attempts?.length ?? 0}명</span>
-						</div>
-						<div class="border-ink overflow-x-auto border-t">
-							<table class="w-full min-w-[1240px] text-left text-sm">
-								<thead class="table-head">
-									<tr>
-										<th class="p-3">지원자</th>
-										<th class="p-3">Discord ID</th>
-										<th class="p-3">상태</th>
-										<th class="p-3">객관식</th>
-										<th class="p-3">단답형</th>
-										<th class="p-3">서술형</th>
-										<th class="p-3">논술형</th>
-										<th class="p-3">총점 · 판정</th>
-										<th class="p-3">응시 시간</th>
-										<th class="p-3"></th>
-									</tr>
-								</thead>
-								<tbody>
-									{#each data.attempts ?? [] as a}
-										<tr class="border-line border-b">
-											<td class="p-3 font-semibold">
-												{#if a.submittedAt}
-													<a
-														href={`/admin/results?attempt=${a.id}`}
-														data-sveltekit-reload
-														class="text-[#087ba8] underline underline-offset-4">{a.displayName}</a
-													>
-												{:else}
-													{a.displayName}
-												{/if}
-											</td>
-											<td class="p-3 font-mono text-xs">{a.discordId}</td>
-											<td class="p-3"
-												><span class="badge"
-													>{!a.submittedAt
-														? a.pausedAt
-															? '일시 중지'
-															: '응시 중'
-														: a.totalScore === null
-															? a.timedOut
-																? '시간 초과 · 채점 필요'
-																: '채점 필요'
-															: a.timedOut
-																? '시간 초과 · 채점 완료'
-																: '채점 완료'}</span
-												>
-											</td>
-											<td class="p-3">{a.submittedAt ? a.objectiveScore : '-'}</td>
-											<td class="p-3">{a.shortScore ?? '-'}</td>
-											<td class="p-3">{a.descriptiveScore ?? '-'}</td>
-											<td class="p-3">{a.longEssayScore ?? '-'}</td>
-											<td class="p-3 font-bold">
-												{a.totalScore ?? '-'}
-												{#if a.writingPassed !== null}
-													<span
-														class="ml-2 text-xs"
-														class:text-green-700={a.writingPassed}
-														class:text-red-700={!a.writingPassed}
-													>
-														{a.writingPassed ? '기준 충족' : '탈락'}
-													</span>
-												{/if}
-											</td>
-											<td class="p-3 text-xs">
-												{a.submittedAt
-													? Math.round((a.submittedAt.getTime() - a.startedAt.getTime()) / 60000) +
-														'분'
-													: `${a.pausedAt ? '중지' : '남은 시간'} ${formatRemaining(a.expiresAt, a.pausedAt)}`}
-											</td>
-											<td class="p-3">
-												{#if a.submittedAt}<a
-														href={`/admin/results?attempt=${a.id}`}
-														data-sveltekit-reload
-														class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
-														>답안 보기</a
-													>
-												{:else}
-													<div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-														<form
-															method="POST"
-															action={a.pausedAt ? '?/resumeAttempt' : '?/pauseAttempt'}
-														>
-															<input type="hidden" name="id" value={a.id} />
-															<button
-																class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
-															>
-																{a.pausedAt ? '시간 재개' : '시간 중지'}
-															</button>
-														</form>
-														<form method="POST" action="?/extendAttempt" class="flex gap-2">
-															<input type="hidden" name="id" value={a.id} />
-															<button
-																name="minutes"
-																value="5"
-																class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
-																>+5분</button
-															>
-															<button
-																name="minutes"
-																value="10"
-																class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
-																>+10분</button
-															>
-														</form>
-													</div>
-												{/if}
-												<form
-													method="POST"
-													action="?/deleteAttempt"
-													onsubmit={(event) => {
-														if (
-															!confirm(
-																`${a.displayName}님의 응시 결과와 답안을 영구 삭제할까요? 연결된 코드는 재사용할 수 없습니다.`
-															)
-														)
-															event.preventDefault();
-													}}
-												>
-													<input type="hidden" name="id" value={a.id} />
-													<button
-														class="text-xs font-bold text-red-700 underline underline-offset-4"
-														>삭제</button
-													>
-												</form>
-											</td>
+						{:else}
+							<div class="mb-3 flex items-baseline justify-between">
+								<h2 class="text-lg font-bold">응시 결과</h2>
+								<span class="text-xs text-stone-500">총 {data.attempts?.length ?? 0}명</span>
+							</div>
+							<div class="border-ink overflow-x-auto border-t">
+								<table class="w-full min-w-[1240px] text-left text-sm">
+									<thead class="table-head">
+										<tr>
+											<th class="p-3">지원자</th>
+											<th class="p-3">Discord ID</th>
+											<th class="p-3">상태</th>
+											<th class="p-3">객관식</th>
+											<th class="p-3">단답형</th>
+											<th class="p-3">서술형</th>
+											<th class="p-3">논술형</th>
+											<th class="p-3">총점 · 판정</th>
+											<th class="p-3">응시 시간</th>
+											<th class="p-3"></th>
 										</tr>
-									{/each}
-								</tbody>
-							</table>
-						</div>
+									</thead>
+									<tbody>
+										{#each data.attempts ?? [] as a}
+											<tr class="border-line border-b">
+												<td class="p-3 font-semibold">
+													{#if a.submittedAt}
+														<a
+															href={`/admin/results?attempt=${a.id}`}
+															data-sveltekit-reload
+															class="text-[#087ba8] underline underline-offset-4">{a.displayName}</a
+														>
+													{:else}
+														{a.displayName}
+													{/if}
+												</td>
+												<td class="p-3 font-mono text-xs">{a.discordId}</td>
+												<td class="p-3"
+													><span class="badge"
+														>{!a.submittedAt
+															? a.pausedAt
+																? '일시 중지'
+																: '응시 중'
+															: a.totalScore === null
+																? a.timedOut
+																	? '시간 초과 · 채점 필요'
+																	: '채점 필요'
+																: a.timedOut
+																	? '시간 초과 · 채점 완료'
+																	: '채점 완료'}</span
+													>
+												</td>
+												<td class="p-3">{a.submittedAt ? a.objectiveScore : '-'}</td>
+												<td class="p-3">{a.shortScore ?? '-'}</td>
+												<td class="p-3">{a.descriptiveScore ?? '-'}</td>
+												<td class="p-3">{a.longEssayScore ?? '-'}</td>
+												<td class="p-3 font-bold">
+													{a.totalScore ?? '-'}
+													{#if a.writingPassed !== null}
+														<span
+															class="ml-2 text-xs"
+															class:text-green-700={a.writingPassed}
+															class:text-red-700={!a.writingPassed}
+														>
+															{a.writingPassed ? '기준 충족' : '탈락'}
+														</span>
+													{/if}
+												</td>
+												<td class="p-3 text-xs">
+													{a.submittedAt
+														? Math.round(
+																(a.submittedAt.getTime() - a.startedAt.getTime()) / 60000
+															) + '분'
+														: `${a.pausedAt ? '중지' : '남은 시간'} ${formatRemaining(a.expiresAt, a.pausedAt)}`}
+												</td>
+												<td class="p-3">
+													{#if a.submittedAt}<a
+															href={`/admin/results?attempt=${a.id}`}
+															data-sveltekit-reload
+															class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
+															>답안 보기</a
+														>
+													{:else}
+														<div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+															<form
+																method="POST"
+																action={a.pausedAt ? '?/resumeAttempt' : '?/pauseAttempt'}
+															>
+																<input type="hidden" name="id" value={a.id} />
+																<button
+																	class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
+																>
+																	{a.pausedAt ? '시간 재개' : '시간 중지'}
+																</button>
+															</form>
+															<form method="POST" action="?/extendAttempt" class="flex gap-2">
+																<input type="hidden" name="id" value={a.id} />
+																<button
+																	name="minutes"
+																	value="5"
+																	class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
+																	>+5분</button
+																>
+																<button
+																	name="minutes"
+																	value="10"
+																	class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
+																	>+10분</button
+																>
+															</form>
+														</div>
+													{/if}
+													<form
+														method="POST"
+														action="?/deleteAttempt"
+														onsubmit={(event) => {
+															if (
+																!confirm(
+																	`${a.displayName}님의 응시 결과와 답안을 영구 삭제할까요? 연결된 코드는 재사용할 수 없습니다.`
+																)
+															)
+																event.preventDefault();
+														}}
+													>
+														<input type="hidden" name="id" value={a.id} />
+														<button
+															class="text-xs font-bold text-red-700 underline underline-offset-4"
+															>삭제</button
+														>
+													</form>
+												</td>
+											</tr>
+										{/each}
+									</tbody>
+								</table>
+							</div>
+						{/if}
 					</section>
 				{/if}
 			</div>
