@@ -1,5 +1,5 @@
 import { redirect } from '@sveltejs/kit';
-import { getActiveQuestionCount } from '$lib/server/exam-config';
+import { getActiveQuestionCount } from '$lib/domains/exam/server/public';
 
 export const load = async ({ locals }) => {
 	if (!locals.user) throw redirect(303, '/');

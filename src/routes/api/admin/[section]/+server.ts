@@ -1,5 +1,9 @@
 import { error, json } from '@sveltejs/kit';
-import { adminSections, loadAdminSection, type AdminSection } from '$lib/server/admin-dashboard';
+import {
+	adminSections,
+	loadAdminSection,
+	type AdminSection
+} from '$lib/domains/admin/server/public';
 import { admin } from '$lib/server/guard';
 
 export const GET = async (event) => {

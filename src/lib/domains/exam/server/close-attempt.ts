@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm';
-import { answers, attempts, examCodes, examQuestions } from './schema';
-import { database } from './db';
+import { database } from '$lib/server/db';
+import { answers, attempts, examCodes, examQuestions } from '$lib/server/schema';
 
 function answerIndices(value: string) {
 	try {

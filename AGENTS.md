@@ -39,7 +39,9 @@ pnpm drizzle-kit migrate
 - `src/routes`: 화면과 HTTP 진입점. 비즈니스 규칙을 직접 중복 구현하지 않습니다.
 - `src/lib/domains/exam`: 시험 도메인 계약과 클라이언트·서버 공개 API.
   - 라우트는 `client/public.ts`, `server/public.ts`, `shared/public.ts`만 통해 접근합니다.
-- `src/lib/server`: 인증, DB, 스키마, 시험 종료·채점처럼 서버 전용 로직.
+- `src/lib/domains/admin`: 관리자 조회, 문제·코드·응시·채점 Action과 서버 공개 API.
+  - 관리자 라우트는 `server/public.ts`만 사용하며, 내부 Action이나 조회 파일을 직접 import하지 않습니다.
+- `src/lib/server`: 인증, DB, 스키마처럼 여러 도메인이 함께 사용하는 서버 기반 로직.
 - `src/lib/admin`: 관리자 화면 전용 표시 형식과 작은 UI 보조 로직.
 - `src/lib/components`: 재사용 Svelte 컴포넌트. 파일명은 kebab-case입니다.
 - `drizzle`: 생성된 마이그레이션. 스키마 변경 시에만 새 마이그레이션을 추가합니다.

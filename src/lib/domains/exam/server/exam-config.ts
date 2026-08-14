@@ -1,6 +1,6 @@
 import { count, eq } from 'drizzle-orm';
-import { database } from './db';
-import { questions } from './schema';
+import { database } from '$lib/server/db';
+import { questions } from '$lib/server/schema';
 
 let activeQuestionCount: number | null = null;
 

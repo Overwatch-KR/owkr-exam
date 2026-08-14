@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, inArray, isNull, lte } from 'drizzle-orm';
-import { answers, attempts, examCodes, examQuestions, questions } from '$lib/server/schema';
 import { database } from '$lib/server/db';
-import { closeAttempt } from '$lib/server/exam';
+import { answers, attempts, examCodes, examQuestions, questions } from '$lib/server/schema';
+import { closeAttempt } from '$lib/domains/exam/server/public';
 
 export const adminSections = ['overview', 'questions', 'question-new', 'codes', 'results'] as const;
 export type AdminSection = (typeof adminSections)[number];
