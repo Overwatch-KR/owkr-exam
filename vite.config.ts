@@ -9,6 +9,10 @@ export default defineConfig({
 		boundra(),
 		tailwindcss(),
 		sveltekit({
+			// 새 배포본을 감지해 안전하게 새로고침을 안내한다.
+			version: {
+				pollInterval: 60_000
+			},
 			compilerOptions: {
 				// Force runes mode for the project, except for libraries. Can be removed in svelte 6.
 				runes: ({ filename }) =>
