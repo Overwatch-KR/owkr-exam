@@ -42,12 +42,15 @@
 			if (e.persisted) location.replace('/exam');
 		};
 		const onPop = () => location.replace('/exam');
+		let nextShortcutPressed = false;
 		const onKeydown = (event: KeyboardEvent) => {
 			if (event.key === 'Escape' && confirm) confirm = false;
 			if (!attempt || attempt.submittedAt || confirm) return;
 			const isEnter = event.key === 'Enter' || event.code === 'NumpadEnter';
 			if (isEnter && event.shiftKey) {
 				event.preventDefault();
+				if (event.isComposing || event.repeat || nextShortcutPressed) return;
+				nextShortcutPressed = true;
 				goNext();
 				return;
 			}
@@ -65,14 +68,24 @@
 				selectChoice(choiceIndex);
 			}
 		};
+		const onKeyup = (event: KeyboardEvent) => {
+			if (event.key === 'Enter' || event.code === 'NumpadEnter') nextShortcutPressed = false;
+		};
+		const onBlur = () => {
+			nextShortcutPressed = false;
+		};
 		addEventListener('pageshow', onShow);
 		addEventListener('popstate', onPop);
 		addEventListener('keydown', onKeydown);
+		addEventListener('keyup', onKeyup);
+		addEventListener('blur', onBlur);
 		return () => {
 			clearInterval(timer);
 			removeEventListener('pageshow', onShow);
 			removeEventListener('popstate', onPop);
 			removeEventListener('keydown', onKeydown);
+			removeEventListener('keyup', onKeyup);
+			removeEventListener('blur', onBlur);
 		};
 	});
 	const fmt = (ms: number) =>
