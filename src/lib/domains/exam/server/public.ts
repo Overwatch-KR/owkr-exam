@@ -1,6 +1,6 @@
 export { ExamRequestError, examRequestError } from './errors';
 export { closeAttempt } from './close-attempt';
-export { getActiveQuestionCount, invalidateExamConfig } from './exam-config';
+export { getActiveQuestionCount, getActiveExamSummary, invalidateExamConfig } from './exam-config';
 export { getExamStatus } from './use-cases/get-exam-status';
 export { saveAnswer } from './use-cases/save-answer';
 export { startExam } from './use-cases/start-exam';

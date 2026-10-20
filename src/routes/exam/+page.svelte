@@ -38,6 +38,8 @@
 	let allAnswered = $derived(
 		Boolean(attempt?.questions.length) && answeredCount === attempt?.questions.length
 	);
+	let questionCount = $derived(data.examSummary.reduce((sum, item) => sum + item.count, 0));
+	let totalPoints = $derived(data.examSummary.reduce((sum, item) => sum + item.points, 0));
 	onMount(() => {
 		const timer = setInterval(() => {
 			if (attempt) {
@@ -123,7 +125,7 @@
 			values = Object.fromEntries(
 				started.questions.map((question) => [question.id, question.answer])
 			);
-			serverTimeOffset = 0;
+			serverTimeOffset = new Date(started.serverNow).getTime() - Date.now();
 			updateRemaining();
 		} catch (error) {
 			message = examErrorMessage(error, '올바른 6자리 코드를 입력해 주세요.');
@@ -358,10 +360,21 @@
 
 			<div class="mt-8 space-y-4 border-y border-[#c8d0d9] py-6 text-sm leading-7 text-[#34404d]">
 				<p>
-					※ 객관식 (19) 문항, 단답형 (9) 문항, 서술형 (6) 문항, 논술형 (1) 문항, 총 ({data.activeQuestionCount})
-					문항으로 구성되어 있습니다.
+					※ {data.examSummary
+						.filter((item) => item.count > 0)
+						.map((item) => `${item.label} ${item.count}문항`)
+						.join(', ')}으로 구성되어 있으며, 총 {questionCount}문항입니다.
 				</p>
-				<p>※ 객관식 44점, 단답형 16점, 서술형 20점, 논술형 20점, 총 100점 만점입니다.</p>
+				<p>
+					※ {data.examSummary
+						.filter((item) => item.count > 0)
+						.map((item) => `${item.label} ${item.points}점`)
+						.join(', ')}, 총 {totalPoints}점 만점입니다.
+				</p>
+				<p>
+					※ 답안은 자동 저장됩니다. 저장 상태를 확인하고, 저장 실패가 표시되면 다시 저장해 주세요.
+					서술·논술형의 권장 분량은 참고용이며 분량 자체는 채점하지 않습니다.
+				</p>
 				<p>
 					※ 응시 시간은 60분이며, 답안 제출 전 문제의 정답을 제대로 체크 또는 작성하였는지 다시 한
 					번 검토하시길 바랍니다.
@@ -380,10 +393,18 @@
 					disabled={starting}
 					onclick={() => (readyToStart = false)}>이전</button
 				>
-				<button type="button" class="btn" disabled={starting} onclick={start}>
+				<button
+					type="button"
+					class="btn"
+					disabled={starting || questionCount === 0}
+					onclick={start}
+				>
 					{starting ? '시험 준비 중…' : '시험 시작'}
 				</button>
 			</div>
+			{#if questionCount === 0}<p role="alert" class="notice-error mt-3">
+					등록된 시험 문제가 없습니다. 운영진에게 문의해 주세요.
+				</p>{/if}
 			{#if starting}<p class="mt-3 text-right text-xs text-[#6a7684]">
 					시험 문제를 준비하고 있습니다.
 				</p>{/if}
