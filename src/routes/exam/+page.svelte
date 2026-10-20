@@ -26,6 +26,8 @@
 	let index = $state(0);
 	let values = $state<Record<string, string>>({});
 	let saveError = $state('');
+	let pendingAnswerCount = $state(0);
+	let retryingSave = $state(false);
 	let remaining = $state(0);
 	let confirm = $state(false);
 	let submitting = $state(false);
@@ -38,9 +40,12 @@
 	let allAnswered = $derived(
 		Boolean(attempt?.questions.length) && answeredCount === attempt?.questions.length
 	);
+	let answerLocked = $derived(Boolean(attempt?.pausedAt) || submitting);
+	let questionCount = $derived(data.examSummary.reduce((sum, item) => sum + item.count, 0));
+	let totalPoints = $derived(data.examSummary.reduce((sum, item) => sum + item.points, 0));
 	onMount(() => {
 		const timer = setInterval(() => {
-			if (attempt) {
+			if (attempt && !attempt.submittedAt) {
 				updateRemaining();
 				if (!attempt.pausedAt && !remaining) submit(true);
 			}
@@ -53,7 +58,7 @@
 		let nextShortcutPressed = false;
 		const onKeydown = (event: KeyboardEvent) => {
 			if (event.key === 'Escape' && confirm) confirm = false;
-			if (!attempt || attempt.submittedAt || attempt.pausedAt || confirm) return;
+			if (!attempt || attempt.submittedAt || answerLocked || confirm) return;
 			const isEnter = event.key === 'Enter' || event.code === 'NumpadEnter';
 			if (isEnter && event.shiftKey) {
 				event.preventDefault();
@@ -82,11 +87,19 @@
 		const onBlur = () => {
 			nextShortcutPressed = false;
 		};
+		const onBeforeUnload = (event: BeforeUnloadEvent) => {
+			if (!attempt || attempt.submittedAt || !dirtyAnswerIds.size) return;
+			event.preventDefault();
+			event.returnValue = '';
+		};
+		const onOnline = () => void retryAnswers();
 		addEventListener('pageshow', onShow);
 		addEventListener('popstate', onPop);
 		addEventListener('keydown', onKeydown);
 		addEventListener('keyup', onKeyup);
 		addEventListener('blur', onBlur);
+		addEventListener('beforeunload', onBeforeUnload);
+		addEventListener('online', onOnline);
 		return () => {
 			clearInterval(timer);
 			clearInterval(statusTimer);
@@ -96,6 +109,8 @@
 			removeEventListener('keydown', onKeydown);
 			removeEventListener('keyup', onKeyup);
 			removeEventListener('blur', onBlur);
+			removeEventListener('beforeunload', onBeforeUnload);
+			removeEventListener('online', onOnline);
 		};
 	});
 	const fmt = (ms: number) =>
@@ -123,7 +138,7 @@
 			values = Object.fromEntries(
 				started.questions.map((question) => [question.id, question.answer])
 			);
-			serverTimeOffset = 0;
+			serverTimeOffset = new Date(started.serverNow).getTime() - Date.now();
 			updateRemaining();
 		} catch (error) {
 			message = examErrorMessage(error, '올바른 6자리 코드를 입력해 주세요.');
@@ -138,8 +153,9 @@
 	const failedAnswerIds = new Set<string>();
 
 	function save(id: string) {
-		if (attempt?.pausedAt) return;
+		if (answerLocked || attempt?.submittedAt) return;
 		dirtyAnswerIds.add(id);
+		pendingAnswerCount = dirtyAnswerIds.size;
 		clearTimeout(timers[id]);
 		timers[id] = setTimeout(() => {
 			delete timers[id];
@@ -156,13 +172,14 @@
 			.then(() => {
 				failedAnswerIds.delete(id);
 				if ((values[id] ?? '') === value) dirtyAnswerIds.delete(id);
+				pendingAnswerCount = dirtyAnswerIds.size;
 				saveError = failedAnswerIds.size
 					? '일부 답안을 저장하지 못했습니다. 네트워크를 확인해 주세요.'
 					: '';
 			})
 			.catch((error) => {
 				failedAnswerIds.add(id);
-				saveError = '답안을 저장하지 못했습니다. 네트워크를 확인한 뒤 다시 입력해 주세요.';
+				saveError = '답안을 저장하지 못했습니다. 네트워크를 확인한 뒤 저장을 다시 시도해 주세요.';
 				throw error;
 			});
 		saveChains[id] = request;
@@ -179,7 +196,21 @@
 			clearTimeout(timers[id]);
 			delete timers[id];
 		}
-		await Promise.all(answerIds.map(persistAnswer));
+		const results = await Promise.allSettled(answerIds.map(persistAnswer));
+		const failed = results.find((result) => result.status === 'rejected');
+		if (failed?.status === 'rejected') throw failed.reason;
+	}
+
+	async function retryAnswers() {
+		if (!attempt || attempt.submittedAt || answerLocked || retryingSave) return;
+		retryingSave = true;
+		try {
+			await flushPendingAnswers();
+		} catch {
+			// 저장 실패 안내를 유지하고 다음 재시도를 허용합니다.
+		} finally {
+			retryingSave = false;
+		}
 	}
 
 	function clearPendingSaveTimers() {
@@ -188,11 +219,11 @@
 	}
 
 	function goNext() {
-		if (attempt && !attempt.pausedAt && index < attempt.questions.length - 1) index += 1;
+		if (attempt && !answerLocked && index < attempt.questions.length - 1) index += 1;
 	}
 
 	function selectChoice(optionIndex: number) {
-		if (!q || attempt?.pausedAt || q.type !== 'multiple' || optionIndex >= q.options.length) return;
+		if (!q || answerLocked || q.type !== 'multiple' || optionIndex >= q.options.length) return;
 		if (q.allowsMultipleAnswers) {
 			const selected = selectedChoiceIndices(values[q.id]);
 			const next = selected.includes(optionIndex)
@@ -218,7 +249,7 @@
 	}
 
 	async function submit(timeout = false) {
-		if (!attempt || submitting) return;
+		if (!attempt || attempt.submittedAt || submitting) return;
 		submitting = true;
 		try {
 			if (timeout) clearPendingSaveTimers();
@@ -358,10 +389,21 @@
 
 			<div class="mt-8 space-y-4 border-y border-[#c8d0d9] py-6 text-sm leading-7 text-[#34404d]">
 				<p>
-					※ 객관식 (19) 문항, 단답형 (9) 문항, 서술형 (6) 문항, 논술형 (1) 문항, 총 ({data.activeQuestionCount})
-					문항으로 구성되어 있습니다.
+					※ {data.examSummary
+						.filter((item) => item.count > 0)
+						.map((item) => `${item.label} ${item.count}문항`)
+						.join(', ')}으로 구성되어 있으며, 총 {questionCount}문항입니다.
 				</p>
-				<p>※ 객관식 44점, 단답형 16점, 서술형 20점, 논술형 20점, 총 100점 만점입니다.</p>
+				<p>
+					※ {data.examSummary
+						.filter((item) => item.count > 0)
+						.map((item) => `${item.label} ${item.points}점`)
+						.join(', ')}, 총 {totalPoints}점 만점입니다.
+				</p>
+				<p>
+					※ 답안은 자동 저장됩니다. 저장 상태를 확인하고, 저장 실패가 표시되면 다시 저장해 주세요.
+					서술·논술형의 권장 분량은 참고용이며 분량 자체는 채점하지 않습니다.
+				</p>
 				<p>
 					※ 응시 시간은 60분이며, 답안 제출 전 문제의 정답을 제대로 체크 또는 작성하였는지 다시 한
 					번 검토하시길 바랍니다.
@@ -380,10 +422,18 @@
 					disabled={starting}
 					onclick={() => (readyToStart = false)}>이전</button
 				>
-				<button type="button" class="btn" disabled={starting} onclick={start}>
+				<button
+					type="button"
+					class="btn"
+					disabled={starting || questionCount === 0}
+					onclick={start}
+				>
 					{starting ? '시험 준비 중…' : '시험 시작'}
 				</button>
 			</div>
+			{#if questionCount === 0}<p role="alert" class="notice-error mt-3">
+					등록된 시험 문제가 없습니다. 운영진에게 문의해 주세요.
+				</p>{/if}
 			{#if starting}<p class="mt-3 text-right text-xs text-[#6a7684]">
 					시험 문제를 준비하고 있습니다.
 				</p>{/if}
@@ -438,9 +488,20 @@
 						문제 {index + 1} / {attempt.questions.length} · 답변 {answeredCount}개
 					</p>
 				</div>
-				{#if saveError}<p role="alert" class="notice-error max-w-sm text-xs">
-						{saveError}
-					</p>{/if}
+				<div class="max-w-sm text-right">
+					<p role="status" class="text-xs text-[#6a7684]">
+						{saveError ? '저장 실패' : pendingAnswerCount ? '답안 저장 중…' : '답안 저장 완료'}
+					</p>
+					{#if saveError}
+						<p role="alert" class="notice-error mt-2 text-left text-xs">{saveError}</p>
+						<button
+							type="button"
+							class="btn-secondary mt-2"
+							disabled={answerLocked || retryingSave}
+							onclick={retryAnswers}>{retryingSave ? '저장 재시도 중…' : '답안 다시 저장'}</button
+						>
+					{/if}
+				</div>
 			</div>
 			{#if attempt.pausedAt}
 				<div
@@ -468,7 +529,7 @@
 								type="button"
 								aria-label={`${i + 1}번 문제${values[item.id]?.trim() ? ', 답변 있음' : ', 미응답'}`}
 								aria-current={i === index ? 'step' : undefined}
-								disabled={Boolean(attempt.pausedAt)}
+								disabled={answerLocked}
 								onclick={() => (index = i)}
 								class="h-9 border text-xs font-semibold transition-colors {i === index
 									? 'border-[#087ba8] bg-[#087ba8] text-white'
@@ -524,7 +585,7 @@
 													type="checkbox"
 													name={q.id}
 													value={String(i)}
-													disabled={Boolean(attempt.pausedAt)}
+													disabled={answerLocked}
 													checked={selectedChoiceIndices(values[q.id]).includes(i)}
 													onchange={() => selectChoice(i)}
 													class="mt-0.5"
@@ -534,7 +595,7 @@
 													type="radio"
 													name={q.id}
 													value={String(i)}
-													disabled={Boolean(attempt.pausedAt)}
+													disabled={answerLocked}
 													bind:group={values[q.id]}
 													onchange={() => save(q.id)}
 													class="mt-0.5"
@@ -552,23 +613,28 @@
 							{:else}<textarea
 									aria-label={`${index + 1}번 문제 답안`}
 									class="mt-8 min-h-52 w-full leading-7"
+									maxlength="10000"
+									aria-describedby="answer-limit"
 									bind:value={values[q.id]}
-									disabled={Boolean(attempt.pausedAt)}
+									disabled={answerLocked}
 									oninput={() => save(q.id)}
 									placeholder={q.type === 'short'
 										? '답변을 입력하세요.'
-										: '답변을 충분히 작성하세요.'}></textarea>{/if}
+										: '핵심 내용을 중심으로 답변을 작성하세요.'}></textarea>
+								<p id="answer-limit" class="mt-2 text-xs text-[#6a7684]">
+									최대 10,000자 · {(values[q.id] ?? '').length.toLocaleString('ko-KR')}자 작성
+								</p>{/if}
 							<div class="mt-8 flex justify-between border-t-2 border-[#34404d] pt-5">
 								<button
 									type="button"
 									class="btn-secondary"
-									disabled={index === 0 || Boolean(attempt.pausedAt)}
+									disabled={index === 0 || answerLocked}
 									onclick={() => index--}>← 이전 문제</button
 								>
 								<button
 									type="button"
 									class="btn-secondary"
-									disabled={index === attempt.questions.length - 1 || Boolean(attempt.pausedAt)}
+									disabled={index === attempt.questions.length - 1 || answerLocked}
 									onclick={goNext}
 									>다음 문제 →
 								</button>

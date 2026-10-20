@@ -23,8 +23,10 @@ const gradeAll: AdminAction = async (event) => {
 		const raw = String(data.get(`score-${question.id}`) ?? '').trim();
 		if (!raw) continue;
 		const score = Number(raw);
-		if (!Number.isFinite(score) || score < 0) {
-			return fail(400, { message: `문제 ${question.sortOrder}의 점수를 확인해 주세요.` });
+		if (!Number.isFinite(score) || score < 0 || score > question.points) {
+			return fail(400, {
+				message: `문제 ${question.sortOrder}의 점수는 0점부터 ${question.points}점까지 입력해 주세요.`
+			});
 		}
 		scores.push({ questionId: question.id, score });
 	}

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
 
 	type QuestionType = 'multiple' | 'short' | 'essay';
 	type QuestionDraft = {
@@ -18,14 +18,17 @@
 		action,
 		question = null,
 		draft = null,
-		submitLabel = '문제 등록'
+		submitLabel = '문제 등록',
+		onDirtyChange
 	}: {
 		action: string;
 		question?: QuestionDraft | null;
 		draft?: QuestionDraft | null;
 		submitLabel?: string;
+		onDirtyChange?: (dirty: boolean) => void;
 	} = $props();
 
+	const editorQuestion = untrack(() => question);
 	const initialQuestion = untrack(() => draft || question);
 	let type = $state<QuestionType>((initialQuestion?.type as QuestionType) || 'multiple');
 	let content = $state(initialQuestion?.content || '');
@@ -46,6 +49,20 @@
 				? [0]
 				: [initialQuestion.correctAnswer]
 	);
+
+	const serializeDraft = () =>
+		JSON.stringify({
+			type,
+			content,
+			points,
+			options: type === 'multiple' ? optionRows.map((row) => row.value) : null,
+			correctAnswers: type === 'multiple' ? correctAnswers : null
+		});
+	const originalDraft = untrack(serializeDraft);
+	let submitting = $state(false);
+	let dirty = $derived(serializeDraft() !== originalDraft);
+	$effect(() => onDirtyChange?.(dirty));
+	onDestroy(() => onDirtyChange?.(false));
 
 	const types: Array<{ value: QuestionType; label: string; description: string }> = [
 		{ value: 'multiple', label: '객관식', description: '보기 중 정답을 선택' },
@@ -76,10 +93,23 @@
 	}
 </script>
 
-<form method="POST" {action} class="border-ink border-t-2 bg-white px-5 pt-5 pb-6 sm:px-6">
-	{#if question?.id}<input type="hidden" name="id" value={question.id} />{/if}
-	{#if question?.revision}
-		<input type="hidden" name="revision" value={question.revision} />
+<svelte:window
+	onbeforeunload={(event) => {
+		if (!dirty || submitting) return;
+		event.preventDefault();
+		event.returnValue = '';
+	}}
+/>
+
+<form
+	method="POST"
+	{action}
+	onsubmit={() => (submitting = true)}
+	class="border-ink border-t-2 bg-white px-5 pt-5 pb-6 sm:px-6"
+>
+	{#if editorQuestion?.id}<input type="hidden" name="id" value={editorQuestion.id} />{/if}
+	{#if editorQuestion?.revision}
+		<input type="hidden" name="revision" value={editorQuestion.revision} />
 	{/if}
 
 	<fieldset>
@@ -87,7 +117,7 @@
 		<div class="grid gap-2 sm:grid-cols-3">
 			{#each types as item}
 				<label
-					class="cursor-pointer border px-4 py-3 transition"
+					class="cursor-pointer border px-4 py-3 transition focus-within:ring-2 focus-within:ring-[#087ba8]"
 					class:border-[#087ba8]={type === item.value}
 					class:bg-[#effbff]={type === item.value}
 					class:border-line={type !== item.value}
@@ -121,6 +151,7 @@
 					name="points"
 					type="number"
 					step="0.01"
+					min="0.01"
 					bind:value={points}
 					required
 					class="w-full pr-9"
@@ -150,7 +181,7 @@
 				{#each optionRows as row, index (row.id)}
 					<div class="flex items-center gap-2">
 						<label
-							class="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border font-mono text-xs font-bold"
+							class="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border font-mono text-xs font-bold focus-within:ring-2 focus-within:ring-[#087ba8] focus-within:ring-offset-2"
 							class:border-[#087ba8]={correctAnswers.includes(index)}
 							class:bg-[#087ba8]={correctAnswers.includes(index)}
 							class:text-white={correctAnswers.includes(index)}
@@ -170,6 +201,7 @@
 						</label>
 						<input
 							name="option"
+							aria-label={`${index + 1}번 보기 내용`}
 							bind:value={row.value}
 							required
 							class="min-w-0 flex-1"
@@ -211,5 +243,7 @@
 		</p>
 	{/if}
 
-	<button class="btn mt-6 w-full sm:w-auto sm:min-w-36">{submitLabel}</button>
+	<button class="btn mt-6 w-full sm:w-auto sm:min-w-36" disabled={submitting}
+		>{submitting ? '저장 중…' : submitLabel}</button
+	>
 </form>

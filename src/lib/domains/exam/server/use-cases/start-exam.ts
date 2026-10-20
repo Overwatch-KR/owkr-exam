@@ -116,6 +116,7 @@ export async function startExam(
 			type: 'ready' as const,
 			attempt: {
 				id: attempt.id,
+				serverNow: new Date().toISOString(),
 				expiresAt: attempt.expiresAt.toISOString(),
 				pausedAt: attempt.pausedAt?.toISOString() ?? null,
 				questions: examQuestionRows.map((question) => ({
