@@ -423,8 +423,8 @@
 				<p>
 					※ {data.examSummary
 						.filter((item) => item.count > 0)
-						.map((item) => `${item.label} ${item.count}문항`)
-						.join(', ')}으로 구성되어 있으며, 총 {questionCount}문항입니다.
+						.map((item) => `${item.label} ${item.count}문제`)
+						.join(', ')} · 총 {questionCount}문제입니다.
 				</p>
 				<p>
 					※ {data.examSummary
@@ -433,13 +433,10 @@
 						.join(', ')}, 총 {totalPoints}점 만점입니다.
 				</p>
 				<p>
-					※ 답안은 자동 저장됩니다. 저장 상태를 확인하고, 저장 실패가 표시되면 다시 저장해 주세요.
-					서술·논술형의 권장 분량은 참고용이며 분량 자체는 채점하지 않습니다.
+					※ 답안은 자동으로 저장됩니다. 저장하지 못했다는 안내가 나오면 ‘답안 다시 저장’을 눌러
+					주세요. 서술·논술형의 권장 분량은 참고용이며 분량 자체는 채점하지 않습니다.
 				</p>
-				<p>
-					※ 응시 시간은 60분이며, 답안 제출 전 문제의 정답을 제대로 체크 또는 작성하였는지 다시 한
-					번 검토하시길 바랍니다.
-				</p>
+				<p>※ 시험 시간은 60분입니다. 제출하기 전에 답을 빠뜨린 문제가 없는지 확인해 주세요.</p>
 				<p>
 					※ 본 시험지의 저작권은 오버워치 코리아 서버에 있습니다. 유출 또는 누설하는 행위 일체를
 					금합니다.
@@ -501,7 +498,7 @@
 	<main class="min-h-screen bg-[#f3f5f7]">
 		<header class="site-header sticky top-0 z-30 bg-white shadow-sm">
 			<div
-				class="mx-auto flex min-h-20 max-w-[1320px] items-center justify-between gap-3 px-5 py-3 sm:px-8"
+				class="mx-auto flex min-h-20 max-w-[1200px] items-center justify-between gap-3 px-5 py-3 sm:px-8"
 			>
 				<span class="wordmark">OWKR EXAM</span>
 				<div class="text-right">
@@ -512,12 +509,16 @@
 						{attempt.pausedAt ? '중지됨' : fmt(remaining)}
 					</p>
 					<p role="status" class="text-xs text-[#6a7684]">
-						{saveError ? '저장 실패' : pendingAnswerCount ? '답안 저장 중…' : '답안 저장 완료'}
+						{saveError
+							? '저장하지 못했습니다'
+							: pendingAnswerCount
+								? '답안을 저장하는 중…'
+								: '답안이 저장되었습니다'}
 					</p>
 				</div>
 			</div>
 		</header>
-		<div class="mx-auto max-w-[1320px] px-5 py-6 sm:px-8 sm:py-8">
+		<div class="mx-auto max-w-[1200px] px-5 py-6 sm:px-8 sm:py-8">
 			<div class="mb-5 flex items-end justify-between border-b-2 border-[#34404d] pb-4">
 				<div>
 					<p class="text-base font-bold tracking-[-.02em]">OWKR 관리자 선발시험</p>
@@ -532,7 +533,7 @@
 							type="button"
 							class="btn-secondary mt-2"
 							disabled={answerLocked || retryingSave}
-							onclick={retryAnswers}>{retryingSave ? '저장 재시도 중…' : '답안 다시 저장'}</button
+							onclick={retryAnswers}>{retryingSave ? '다시 저장하는 중…' : '답안 다시 저장'}</button
 						>
 					{/if}
 				</div>
@@ -549,34 +550,36 @@
 					</p>
 				</div>
 			{/if}
-			<div class="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
-				<aside class="h-fit border border-[#bfd4df] bg-[#eaf7fb] p-4 lg:sticky lg:top-24">
+			<div class="grid gap-5 md:grid-cols-[184px_minmax(0,1fr)]">
+				<aside
+					class="order-2 h-fit border border-[#d5dce2] bg-white p-3 md:sticky md:top-24 md:order-1 md:max-h-[calc(100dvh-7rem)] md:overflow-y-auto"
+				>
 					<div class="mb-4 flex items-baseline justify-between">
-						<p class="text-sm font-bold text-[#24333f]">문항 목록</p>
+						<p class="text-sm font-bold text-[#24333f]">문제 번호</p>
 						<span class="font-mono text-xs font-bold text-[#087ba8]"
 							>{answeredCount}/{attempt.questions.length}</span
 						>
 					</div>
-					<div class="mb-3 flex flex-wrap gap-1.5" aria-label="문항 필터">
-						{#each [{ value: 'all', label: '전체', count: numberedQuestions.length }, { value: 'unanswered', label: '미응답', count: unansweredQuestions.length }, { value: 'review', label: '검토', count: reviewQuestions.length }] as filter}
+					<div class="mb-3 grid gap-1.5" aria-label="문제 모아 보기">
+						{#each [{ value: 'all', label: '전체', count: numberedQuestions.length }, { value: 'unanswered', label: '안 푼 문제', count: unansweredQuestions.length }, { value: 'review', label: '다시 볼 문제', count: reviewQuestions.length }] as filter}
 							<button
 								type="button"
-								class="btn-secondary px-2 py-1 text-xs aria-pressed:border-[#087ba8] aria-pressed:bg-[#d8edf5] aria-pressed:text-[#075c7d]"
+								class="btn-secondary w-full justify-between px-2 py-1 text-xs aria-pressed:border-[#087ba8] aria-pressed:bg-[#d8edf5] aria-pressed:text-[#075c7d]"
 								aria-pressed={questionFilter === filter.value}
 								onclick={() => (questionFilter = filter.value as typeof questionFilter)}
 								>{filter.label} {filter.count}</button
 							>
 						{/each}
 					</div>
-					<div class="grid grid-cols-6 gap-1.5 lg:grid-cols-5">
+					<div class="grid grid-cols-7 gap-1 md:grid-cols-5">
 						{#each visibleQuestions as { item, i }}
 							<button
 								type="button"
-								aria-label={`${i + 1}번 문제${values[item.id]?.trim() ? ', 답변 있음' : ', 미응답'}${reviewIds.includes(item.id) ? ', 검토 표시' : ''}`}
+								aria-label={`${i + 1}번 문제${values[item.id]?.trim() ? ', 답변 있음' : ', 아직 답하지 않음'}${reviewIds.includes(item.id) ? ', 나중에 다시 보기' : ''}`}
 								aria-current={i === index ? 'step' : undefined}
 								disabled={answerLocked}
 								onclick={() => goToQuestion(i)}
-								class="h-9 border text-xs font-semibold transition-colors {i === index
+								class="h-8 min-w-0 border text-xs font-semibold transition-colors {i === index
 									? 'border-[#087ba8] bg-[#087ba8] text-white'
 									: values[item.id]?.trim()
 										? 'border-[#b7dce9] bg-[#effbff] text-[#087ba8]'
@@ -587,18 +590,18 @@
 					</div>
 					{#if !visibleQuestions.length}<p role="status" class="text-xs leading-5">
 							{questionFilter === 'review'
-								? '검토 표시한 문항이 없습니다.'
-								: '미응답 문항이 없습니다.'}
+								? '나중에 다시 볼 문제가 없습니다.'
+								: '모든 문제에 답했습니다.'}
 						</p>{/if}
 					<p class="mt-4 border-t border-[#bfd4df] pt-3 text-[11px] leading-5 text-[#52616e]">
-						연한 파랑: 답변 완료<br />진한 파랑: 현재 문제 · ★: 검토 표시
+						연한 파랑: 답한 문제<br />진한 파랑: 지금 보는 문제<br />★: 다시 볼 문제
 					</p>
 					<p class="mt-3 text-[11px] leading-5 text-[#52616e]">
 						Shift + Enter: 다음 문제<br />1–5: 객관식 선택{q?.allowsMultipleAnswers ? '/해제' : ''}
 					</p>
 					{#if allAnswered}
 						<p id="all-answered" class="mt-4 text-center text-xs font-semibold text-[#087ba8]">
-							모든 문항에 답했습니다.
+							모든 문제에 답했습니다.
 						</p>
 					{/if}
 					<button
@@ -608,26 +611,26 @@
 							: 'btn mt-5 w-full'}
 						aria-describedby={allAnswered ? 'all-answered' : undefined}
 						disabled={submitting || Boolean(attempt.pausedAt)}
-						onclick={() => (confirm = true)}>시험 제출</button
+						onclick={() => (confirm = true)}>답안 제출</button
 					>
 				</aside>
 				{#if q}
 					{#key q.id}
 						<section
-							class="border border-[#d5dce2] bg-white p-6 shadow-[0_1px_1px_rgba(17,24,32,0.02)] sm:p-9"
+							class="order-1 min-w-0 border border-[#d5dce2] bg-white p-4 shadow-[0_1px_1px_rgba(17,24,32,0.02)] sm:p-6 md:order-2"
 						>
 							<div class="border-b-2 border-[#34404d] pb-6">
 								<div class="flex items-baseline justify-between">
 									<p class="font-mono text-sm font-bold text-[#087ba8]">문제 {index + 1}</p>
-									<span class="text-sm font-semibold text-[#52616e]">배점 {q.points}점</span>
+									<span class="text-sm font-semibold text-[#52616e]">{q.points}점 문제</span>
 								</div>
 								<h1
 									id="exam-question-heading"
 									tabindex="-1"
-									class="mt-6 scroll-mt-28 text-xl leading-9 font-medium tracking-[-.02em] whitespace-pre-wrap sm:text-[22px]"
+									class="mt-4 scroll-mt-28 text-base leading-7 font-medium whitespace-pre-wrap sm:text-lg sm:leading-8"
 								>
 									{#each q.content.split(/\n\s*\n|\n(?=\s*(?:\d+[.)]|[①-⑳]|\[))/) as paragraph}<span
-											class="mb-4 block last:mb-0">{paragraph}</span
+											class="mb-3 block last:mb-0">{paragraph}</span
 										>{/each}
 								</h1>
 								<button
@@ -636,13 +639,13 @@
 									aria-pressed={reviewIds.includes(q.id)}
 									disabled={answerLocked}
 									onclick={toggleReview}
-									>{reviewIds.includes(q.id) ? '★ 검토 표시 해제' : '☆ 검토 표시'}</button
+									>{reviewIds.includes(q.id) ? '★ 다시 보기 해제' : '☆ 나중에 다시 보기'}</button
 								>
 							</div>
 							{#if q.type === 'multiple'}
-								<div class="mt-8 border border-[#cfd8df]">
+								<div class="mt-5 border border-[#cfd8df]">
 									{#each q.options as option, i}<label
-											class="flex cursor-pointer gap-4 border-b border-[#dfe4e9] bg-white px-5 py-4 last:border-0 hover:bg-[#f5fbfd]"
+											class="flex cursor-pointer gap-3 border-b border-[#dfe4e9] bg-white px-4 py-3 last:border-0 hover:bg-[#f5fbfd]"
 											>{#if q.allowsMultipleAnswers}
 												<input
 													type="checkbox"
@@ -675,8 +678,8 @@
 								{/if}
 							{:else}<textarea
 									aria-label={`${index + 1}번 문제 답안`}
-									class="mt-8 w-full leading-7"
-									rows={q.type === 'short' ? 3 : longEssay ? 14 : 8}
+									class="mt-5 w-full leading-7"
+									rows={q.type === 'short' ? 3 : longEssay ? 10 : 6}
 									maxlength="10000"
 									aria-describedby="answer-limit"
 									bind:value={values[q.id]}
@@ -717,14 +720,14 @@
 				<p class="text-sm font-semibold">답안 제출 확인</p>
 			</div>
 			<div class="p-6">
-				<AlertDialog.Title class="text-xl font-bold">시험을 제출할까요?</AlertDialog.Title>
+				<AlertDialog.Title class="text-xl font-bold">답안을 제출할까요?</AlertDialog.Title>
 				<AlertDialog.Description class="mt-4 text-sm leading-6 text-[#6a7684]">
-					제출 후에는 답안을 수정하거나 다시 응시할 수 없습니다.<br />미응답 문항:
+					제출 후에는 답안을 수정하거나 다시 응시할 수 없습니다.<br />아직 답하지 않은 문제:
 					<b>{attempt.questions.filter((item) => !values[item.id]?.trim()).length}개</b>
 				</AlertDialog.Description>
 				{#if unansweredQuestions.length}
 					<div class="mt-4">
-						<p class="text-sm font-semibold">미응답 문항으로 이동</p>
+						<p class="text-sm font-semibold">아직 답하지 않은 문제로 돌아가기</p>
 						<div class="mt-2 flex flex-wrap gap-2">
 							{#each unansweredQuestions as { i }}<button
 									type="button"
@@ -736,7 +739,7 @@
 				{/if}
 				{#if reviewQuestions.length}
 					<div class="mt-4">
-						<p class="text-sm font-semibold">검토 표시한 문항 {reviewQuestions.length}개</p>
+						<p class="text-sm font-semibold">나중에 다시 볼 문제 {reviewQuestions.length}개</p>
 						<div class="mt-2 flex flex-wrap gap-2">
 							{#each reviewQuestions as { i }}<button
 									type="button"
@@ -749,7 +752,7 @@
 				<div class="mt-7 flex justify-end gap-2">
 					<AlertDialog.Cancel class="btn-secondary">계속 작성</AlertDialog.Cancel>
 					<button type="button" class="btn" disabled={submitting} onclick={() => submit()}>
-						{submitting ? '답안 저장 중…' : '제출하기'}
+						{submitting ? '답안을 저장하는 중…' : '제출하기'}
 					</button>
 				</div>
 			</div>
