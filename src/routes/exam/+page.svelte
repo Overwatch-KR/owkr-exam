@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import {
@@ -34,6 +34,38 @@
 	let statusSyncing = $state(false);
 	let serverTimeOffset = $state(0);
 	let q = $derived(attempt?.questions[index]);
+	let reviewIds = $state<string[]>([]);
+	let questionFilter = $state<'all' | 'unanswered' | 'review'>('all');
+	let numberedQuestions = $derived(attempt?.questions.map((item, i) => ({ item, i })) ?? []);
+	let unansweredQuestions = $derived(
+		numberedQuestions.filter(({ item }) => !values[item.id]?.trim())
+	);
+	let reviewQuestions = $derived(
+		numberedQuestions.filter(({ item }) => reviewIds.includes(item.id))
+	);
+	let visibleQuestions = $derived(
+		questionFilter === 'unanswered'
+			? unansweredQuestions
+			: questionFilter === 'review'
+				? reviewQuestions
+				: numberedQuestions
+	);
+	let longEssay = $derived(q?.type === 'essay' && index === (attempt?.questions.length ?? 0) - 1);
+	async function goToQuestion(nextIndex: number) {
+		if (!attempt || answerLocked || nextIndex < 0 || nextIndex >= attempt.questions.length) return;
+		confirm = false;
+		index = nextIndex;
+		await tick();
+		const heading = document.getElementById('exam-question-heading');
+		heading?.focus({ preventScroll: true });
+		heading?.scrollIntoView({ block: 'start' });
+	}
+	function toggleReview() {
+		if (!q || answerLocked) return;
+		reviewIds = reviewIds.includes(q.id)
+			? reviewIds.filter((id) => id !== q.id)
+			: [...reviewIds, q.id];
+	}
 	let answeredCount = $derived(
 		attempt?.questions.filter((item) => values[item.id]?.trim()).length ?? 0
 	);
@@ -219,7 +251,7 @@
 	}
 
 	function goNext() {
-		if (attempt && !answerLocked && index < attempt.questions.length - 1) index += 1;
+		void goToQuestion(index + 1);
 	}
 
 	function selectChoice(optionIndex: number) {
@@ -467,8 +499,10 @@
 	</main>
 {:else}
 	<main class="min-h-screen bg-[#f3f5f7]">
-		<header class="site-header">
-			<div class="mx-auto flex h-16 max-w-[1320px] items-center justify-between px-5 sm:px-8">
+		<header class="site-header sticky top-0 z-30 bg-white shadow-sm">
+			<div
+				class="mx-auto flex min-h-20 max-w-[1320px] items-center justify-between gap-3 px-5 py-3 sm:px-8"
+			>
 				<span class="wordmark">OWKR EXAM</span>
 				<div class="text-right">
 					<p class="text-[10px] font-semibold tracking-[0.12em] text-[#6a7684]">
@@ -476,6 +510,9 @@
 					</p>
 					<p class="font-mono text-xl font-bold text-[#087ba8] tabular-nums">
 						{attempt.pausedAt ? '중지됨' : fmt(remaining)}
+					</p>
+					<p role="status" class="text-xs text-[#6a7684]">
+						{saveError ? '저장 실패' : pendingAnswerCount ? '답안 저장 중…' : '답안 저장 완료'}
 					</p>
 				</div>
 			</div>
@@ -489,9 +526,6 @@
 					</p>
 				</div>
 				<div class="max-w-sm text-right">
-					<p role="status" class="text-xs text-[#6a7684]">
-						{saveError ? '저장 실패' : pendingAnswerCount ? '답안 저장 중…' : '답안 저장 완료'}
-					</p>
 					{#if saveError}
 						<p role="alert" class="notice-error mt-2 text-left text-xs">{saveError}</p>
 						<button
@@ -516,31 +550,48 @@
 				</div>
 			{/if}
 			<div class="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
-				<aside class="h-fit border border-[#bfd4df] bg-[#eaf7fb] p-4 lg:sticky lg:top-5">
+				<aside class="h-fit border border-[#bfd4df] bg-[#eaf7fb] p-4 lg:sticky lg:top-24">
 					<div class="mb-4 flex items-baseline justify-between">
 						<p class="text-sm font-bold text-[#24333f]">문항 목록</p>
 						<span class="font-mono text-xs font-bold text-[#087ba8]"
 							>{answeredCount}/{attempt.questions.length}</span
 						>
 					</div>
-					<div class="grid grid-cols-6 gap-1.5 lg:grid-cols-5">
-						{#each attempt.questions as item, i}
+					<div class="mb-3 flex flex-wrap gap-1.5" aria-label="문항 필터">
+						{#each [{ value: 'all', label: '전체', count: numberedQuestions.length }, { value: 'unanswered', label: '미응답', count: unansweredQuestions.length }, { value: 'review', label: '검토', count: reviewQuestions.length }] as filter}
 							<button
 								type="button"
-								aria-label={`${i + 1}번 문제${values[item.id]?.trim() ? ', 답변 있음' : ', 미응답'}`}
+								class="btn-secondary px-2 py-1 text-xs aria-pressed:border-[#087ba8] aria-pressed:bg-[#d8edf5] aria-pressed:text-[#075c7d]"
+								aria-pressed={questionFilter === filter.value}
+								onclick={() => (questionFilter = filter.value as typeof questionFilter)}
+								>{filter.label} {filter.count}</button
+							>
+						{/each}
+					</div>
+					<div class="grid grid-cols-6 gap-1.5 lg:grid-cols-5">
+						{#each visibleQuestions as { item, i }}
+							<button
+								type="button"
+								aria-label={`${i + 1}번 문제${values[item.id]?.trim() ? ', 답변 있음' : ', 미응답'}${reviewIds.includes(item.id) ? ', 검토 표시' : ''}`}
 								aria-current={i === index ? 'step' : undefined}
 								disabled={answerLocked}
-								onclick={() => (index = i)}
+								onclick={() => goToQuestion(i)}
 								class="h-9 border text-xs font-semibold transition-colors {i === index
 									? 'border-[#087ba8] bg-[#087ba8] text-white'
 									: values[item.id]?.trim()
 										? 'border-[#b7dce9] bg-[#effbff] text-[#087ba8]'
-										: 'border-line bg-white'}">{i + 1}</button
+										: 'border-line bg-white'}"
+								>{i + 1}{reviewIds.includes(item.id) ? ' ★' : ''}</button
 							>
 						{/each}
 					</div>
+					{#if !visibleQuestions.length}<p role="status" class="text-xs leading-5">
+							{questionFilter === 'review'
+								? '검토 표시한 문항이 없습니다.'
+								: '미응답 문항이 없습니다.'}
+						</p>{/if}
 					<p class="mt-4 border-t border-[#bfd4df] pt-3 text-[11px] leading-5 text-[#52616e]">
-						연한 파랑: 답변 완료<br />진한 파랑: 현재 문제
+						연한 파랑: 답변 완료<br />진한 파랑: 현재 문제 · ★: 검토 표시
 					</p>
 					<p class="mt-3 text-[11px] leading-5 text-[#52616e]">
 						Shift + Enter: 다음 문제<br />1–5: 객관식 선택{q?.allowsMultipleAnswers ? '/해제' : ''}
@@ -571,10 +622,22 @@
 									<span class="text-sm font-semibold text-[#52616e]">배점 {q.points}점</span>
 								</div>
 								<h1
-									class="mt-6 text-xl leading-9 font-medium tracking-[-.02em] whitespace-pre-wrap sm:text-[22px]"
+									id="exam-question-heading"
+									tabindex="-1"
+									class="mt-6 scroll-mt-28 text-xl leading-9 font-medium tracking-[-.02em] whitespace-pre-wrap sm:text-[22px]"
 								>
-									{q.content}
+									{#each q.content.split(/\n\s*\n|\n(?=\s*(?:\d+[.)]|[①-⑳]|\[))/) as paragraph}<span
+											class="mb-4 block last:mb-0">{paragraph}</span
+										>{/each}
 								</h1>
+								<button
+									type="button"
+									class="btn-secondary mt-4"
+									aria-pressed={reviewIds.includes(q.id)}
+									disabled={answerLocked}
+									onclick={toggleReview}
+									>{reviewIds.includes(q.id) ? '★ 검토 표시 해제' : '☆ 검토 표시'}</button
+								>
 							</div>
 							{#if q.type === 'multiple'}
 								<div class="mt-8 border border-[#cfd8df]">
@@ -612,7 +675,8 @@
 								{/if}
 							{:else}<textarea
 									aria-label={`${index + 1}번 문제 답안`}
-									class="mt-8 min-h-52 w-full leading-7"
+									class="mt-8 w-full leading-7"
+									rows={q.type === 'short' ? 3 : longEssay ? 14 : 8}
 									maxlength="10000"
 									aria-describedby="answer-limit"
 									bind:value={values[q.id]}
@@ -629,7 +693,7 @@
 									type="button"
 									class="btn-secondary"
 									disabled={index === 0 || answerLocked}
-									onclick={() => index--}>← 이전 문제</button
+									onclick={() => goToQuestion(index - 1)}>← 이전 문제</button
 								>
 								<button
 									type="button"
@@ -647,7 +711,7 @@
 	</main>
 	<AlertDialog.Root bind:open={confirm}>
 		<AlertDialog.Content
-			class="max-w-md overflow-hidden rounded-lg bg-white p-0 shadow-[0_24px_64px_rgba(17,24,32,0.28)]"
+			class="max-h-[85dvh] max-w-md overflow-y-auto overscroll-contain rounded-lg bg-white p-0 shadow-[0_24px_64px_rgba(17,24,32,0.28)]"
 		>
 			<div class="border-b border-[#dfe4e9] px-6 py-4">
 				<p class="text-sm font-semibold">답안 제출 확인</p>
@@ -658,6 +722,30 @@
 					제출 후에는 답안을 수정하거나 다시 응시할 수 없습니다.<br />미응답 문항:
 					<b>{attempt.questions.filter((item) => !values[item.id]?.trim()).length}개</b>
 				</AlertDialog.Description>
+				{#if unansweredQuestions.length}
+					<div class="mt-4">
+						<p class="text-sm font-semibold">미응답 문항으로 이동</p>
+						<div class="mt-2 flex flex-wrap gap-2">
+							{#each unansweredQuestions as { i }}<button
+									type="button"
+									class="btn-secondary"
+									onclick={() => goToQuestion(i)}>{i + 1}번</button
+								>{/each}
+						</div>
+					</div>
+				{/if}
+				{#if reviewQuestions.length}
+					<div class="mt-4">
+						<p class="text-sm font-semibold">검토 표시한 문항 {reviewQuestions.length}개</p>
+						<div class="mt-2 flex flex-wrap gap-2">
+							{#each reviewQuestions as { i }}<button
+									type="button"
+									class="btn-secondary"
+									onclick={() => goToQuestion(i)}>{i + 1}번 ★</button
+								>{/each}
+						</div>
+					</div>
+				{/if}
 				<div class="mt-7 flex justify-end gap-2">
 					<AlertDialog.Cancel class="btn-secondary">계속 작성</AlertDialog.Cancel>
 					<button type="button" class="btn" disabled={submitting} onclick={() => submit()}>
