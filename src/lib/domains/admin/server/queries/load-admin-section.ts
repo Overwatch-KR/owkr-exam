@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, lte } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, inArray, isNull, lte } from 'drizzle-orm';
 import { database } from '$lib/server/db';
 import { answers, attempts, examCodes, examQuestions, questions } from '$lib/server/schema';
 import { closeAttempt } from '$lib/domains/exam/server/public';
@@ -94,9 +94,19 @@ export async function loadAdminSection(section: AdminSection, url: URL) {
 	if (section === 'overview') {
 		await closeExpiredAttempts();
 		const [allAttempts, allCodes, recentCodes] = await Promise.all([
-			db.select().from(attempts).orderBy(desc(attempts.startedAt)),
-			db.select().from(examCodes),
-			db.select().from(examCodes).orderBy(desc(examCodes.createdAt)).limit(5)
+			db
+				.select(getTableColumns(attempts))
+				.from(attempts)
+				.innerJoin(examCodes, eq(attempts.codeId, examCodes.id))
+				.where(eq(examCodes.reusable, false))
+				.orderBy(desc(attempts.startedAt)),
+			db.select().from(examCodes).where(eq(examCodes.reusable, false)),
+			db
+				.select()
+				.from(examCodes)
+				.where(eq(examCodes.reusable, false))
+				.orderBy(desc(examCodes.createdAt))
+				.limit(5)
 		]);
 		const needsGrading = allAttempts.filter((item) => item.submittedAt && item.totalScore === null);
 		return {
@@ -131,7 +141,11 @@ export async function loadAdminSection(section: AdminSection, url: URL) {
 	}
 
 	await closeExpiredAttempts();
-	const allAttempts = await db.select().from(attempts).orderBy(desc(attempts.startedAt));
+	const allAttempts = await db
+		.select({ ...getTableColumns(attempts), isTest: examCodes.reusable })
+		.from(attempts)
+		.innerJoin(examCodes, eq(attempts.codeId, examCodes.id))
+		.orderBy(desc(attempts.startedAt));
 	const scoreRows = allAttempts.length
 		? await db
 				.select({

@@ -49,6 +49,14 @@
 	let questionStatus = $state('all');
 	let resultSearch = $state('');
 	let resultStatus = $state('all');
+	let resultKind = $state('regular');
+	let codeKind = $state('regular');
+	let visibleCodes = $derived(
+		(data.codes ?? []).filter((code) => code.reusable === (codeKind === 'test'))
+	);
+	let kindAttempts = $derived(
+		(data.attempts ?? []).filter((attempt) => attempt.isTest === (resultKind === 'test'))
+	);
 	let gradingValues = $state<Record<string, string>>({});
 	let filteredQuestions = $derived(
 		(data.questions ?? []).filter(
@@ -60,7 +68,7 @@
 		)
 	);
 	let filteredAttempts = $derived(
-		(data.attempts ?? []).filter(
+		kindAttempts.filter(
 			(a) =>
 				`${a.displayName} ${a.discordId}`
 					.toLocaleLowerCase()
@@ -399,6 +407,9 @@
 				<AdminBreadcrumbs items={breadcrumbs} />
 				{#if tab === 'overview' && data.overview}
 					<section class="pt-5 pb-8">
+						<p class="text-muted mb-4 text-xs">
+							일반 응시 기준입니다. 반복 사용 테스트 코드와 테스트 응시는 현황 집계에서 제외됩니다.
+						</p>
 						<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 							<div class="card p-5">
 								<p class="text-xs font-semibold text-[#6a7684]">채점 필요</p>
@@ -848,7 +859,17 @@
 						<div>
 							<div class="mb-3 flex items-baseline justify-between">
 								<h2 class="text-lg font-bold">발급 이력</h2>
-								<span class="text-xs text-stone-500">총 {data.codes?.length ?? 0}건</span>
+								<span class="text-xs text-stone-500">총 {visibleCodes.length}건</span>
+							</div>
+							<div class="mb-4">
+								<AdminSelect
+									label="코드 구분"
+									bind:value={codeKind}
+									options={[
+										{ value: 'regular', label: '일반 코드' },
+										{ value: 'test', label: '테스트 코드' }
+									]}
+								/>
 							</div>
 							<div class="border-ink overflow-x-auto border-t">
 								<table class="w-full min-w-[650px] text-left text-sm">
@@ -862,7 +883,7 @@
 										</tr>
 									</thead>
 									<tbody>
-										{#each data.codes ?? [] as c}
+										{#each visibleCodes as c}
 											<tr class="border-line border-b">
 												<td class="p-3 font-mono font-bold tracking-widest">{c.code}</td>
 												<td class="p-3 font-mono text-xs">{c.discordId}</td>
@@ -898,6 +919,8 @@
 										<h2 class="text-2xl font-bold tracking-[-.03em]">
 											{data.grading.attempt.displayName}
 											답안 채점
+											{#if data.grading.attempt.isTest}<span class="badge ml-2">테스트 응시</span
+												>{/if}
 										</h2>
 										<p class="mt-1 font-mono text-xs text-[#6a7684]">
 											{data.grading.attempt.discordId}
@@ -1135,7 +1158,9 @@
 						{:else}
 							<div class="mb-3 flex items-baseline justify-between">
 								<h2 class="text-lg font-bold">응시 결과</h2>
-								<span class="text-xs text-stone-500">총 {data.attempts?.length ?? 0}명</span>
+								<span class="text-xs text-stone-500"
+									>{resultKind === 'test' ? '테스트' : '일반'} 총 {kindAttempts.length}건</span
+								>
 							</div>
 							<div class="mb-4 flex flex-wrap items-end gap-3">
 								<label class="min-w-0 flex-1 text-xs font-semibold"
@@ -1146,6 +1171,14 @@
 										bind:value={resultSearch}
 									/></label
 								>
+								<AdminSelect
+									label="응시 구분"
+									bind:value={resultKind}
+									options={[
+										{ value: 'regular', label: '일반 응시' },
+										{ value: 'test', label: '테스트 응시' }
+									]}
+								/>
 								<AdminSelect
 									label="응시 상태"
 									bind:value={resultStatus}
@@ -1158,7 +1191,7 @@
 									]}
 								/>
 								<p role="status" class="py-2 text-xs text-stone-500">
-									{filteredAttempts.length}명 표시
+									{filteredAttempts.length}건 표시
 								</p>
 							</div>
 							<div class="border-ink overflow-x-auto border-t">
