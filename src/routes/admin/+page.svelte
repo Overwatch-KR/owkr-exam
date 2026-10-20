@@ -44,6 +44,44 @@
 	let questionDirty = $state(false);
 	let gradingDirty = $state(false);
 	let savingGrades = $state(false);
+	let questionSearch = $state('');
+	let questionStatus = $state('all');
+	let resultSearch = $state('');
+	let resultStatus = $state('all');
+	let gradingValues = $state<Record<string, string>>({});
+	let filteredQuestions = $derived(
+		(data.questions ?? []).filter(
+			(q) =>
+				`${q.sortOrder} ${q.content}`
+					.toLocaleLowerCase()
+					.includes(questionSearch.trim().toLocaleLowerCase()) &&
+				(questionStatus === 'all' || q.active === (questionStatus === 'active'))
+		)
+	);
+	let filteredAttempts = $derived(
+		(data.attempts ?? []).filter(
+			(a) =>
+				`${a.displayName} ${a.discordId}`
+					.toLocaleLowerCase()
+					.includes(resultSearch.trim().toLocaleLowerCase()) &&
+				(resultStatus === 'all' ||
+					(resultStatus === 'paused'
+						? !a.submittedAt && !!a.pausedAt
+						: resultStatus === 'running'
+							? !a.submittedAt && !a.pausedAt
+							: resultStatus === 'pending'
+								? !!a.submittedAt && a.totalScore === null
+								: !!a.submittedAt && a.totalScore !== null))
+		)
+	);
+	let ungradedQuestions = $derived(
+		(data.grading?.questions ?? []).filter((q) => q.score === null && !gradingValues[q.id]?.trim())
+	);
+	function focusScore(questionId: string) {
+		const input = document.getElementById(`score-${questionId}`);
+		input?.focus({ preventScroll: true });
+		input?.scrollIntoView({ block: 'center' });
+	}
 	function setQuestionDirty(dirty: boolean) {
 		questionDirty = dirty;
 	}
@@ -87,6 +125,7 @@
 		const input = document.getElementById(`score-${questionId}`) as HTMLInputElement | null;
 		if (!input) return;
 		input.value = String(score);
+		gradingValues[questionId] = String(score);
 		gradingDirty = true;
 		input.focus();
 	}
@@ -722,6 +761,26 @@
 									<h2 class="text-lg font-bold">등록된 문제</h2>
 									<span class="text-xs text-stone-500">총 {data.questions?.length ?? 0}문항</span>
 								</div>
+								<div class="mb-4 flex flex-wrap items-end gap-3">
+									<label class="min-w-0 flex-1 text-xs font-semibold"
+										>문제 검색<input
+											class="mt-2 w-full"
+											type="search"
+											placeholder="문제 내용 또는 번호…"
+											bind:value={questionSearch}
+										/></label
+									>
+									<label class="text-xs font-semibold"
+										>문제 상태<select class="mt-2 block" bind:value={questionStatus}
+											><option value="all">전체</option><option value="active">활성</option><option
+												value="inactive">비활성</option
+											></select
+										></label
+									>
+									<p role="status" class="py-2 text-xs text-stone-500">
+										{filteredQuestions.length}문항 표시
+									</p>
+								</div>
 								<div class="border-ink overflow-x-auto border-t">
 									<table class="w-full min-w-[540px] table-fixed text-left text-sm">
 										<colgroup
@@ -736,7 +795,7 @@
 											</tr>
 										</thead>
 										<tbody>
-											{#each data.questions ?? [] as q}
+											{#each filteredQuestions as q}
 												<tr class="border-line border-b align-top" class:opacity-40={!q.active}>
 													<td class="p-3 font-mono">{q.sortOrder}</td>
 													<td class="min-w-0 p-3"
@@ -754,6 +813,11 @@
 													<td class="p-3">{q.points}</td>
 												</tr>
 											{/each}
+											{#if !filteredQuestions.length}<tr
+													><td colspan="4" class="p-8 text-center text-sm text-stone-500"
+														>검색 조건에 맞는 항목이 없습니다. 검색어 또는 상태를 바꿔 주세요.</td
+													></tr
+												>{/if}
 										</tbody>
 									</table>
 								</div>
@@ -959,6 +1023,22 @@
 									onsubmit={() => (savingGrades = true)}
 								>
 									<input type="hidden" name="attemptId" value={data.grading.attempt.id} />
+									<div class="border-line mb-5 border-b pb-4">
+										<p role="status" class="text-sm font-semibold">
+											미채점 {ungradedQuestions.length}문항
+										</p>
+										<p class="mt-1 text-xs text-stone-500">
+											번호를 누르면 점수 입력란으로 이동합니다. 입력한 점수는 저장 버튼을 눌러야
+											반영됩니다.
+										</p>
+										<div class="mt-3 flex flex-wrap gap-2">
+											{#each ungradedQuestions as item}<button
+													type="button"
+													class="btn-secondary"
+													onclick={() => focusScore(item.id)}>{item.sortOrder}번</button
+												>{/each}
+										</div>
+									</div>
 									<div class="space-y-4">
 										{#each data.grading.questions as q}
 											<article class="card p-5 sm:p-6">
@@ -1016,19 +1096,28 @@
 															step="0.01"
 															min="0"
 															max={q.points}
-															value={q.score ?? ''}
-															class="w-24"
+															value={gradingValues[q.id] ?? q.score ?? ''}
+															oninput={(event) => (gradingValues[q.id] = event.currentTarget.value)}
+															class="w-24 scroll-mt-8 scroll-mb-40"
 														/>
 													</div>
 												</div>
 											</article>
 										{/each}
 									</div>
-									<div class="mt-5 flex justify-end">
+									<div
+										class="sticky bottom-0 z-20 mt-5 flex justify-end bg-white pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+									>
 										<div
-											class="flex w-full flex-col gap-3 border border-[#dfe4e9] bg-[#f7f8fa] px-4 py-3 sm:w-auto sm:flex-row sm:items-center"
+											class="flex w-full flex-col gap-3 border border-[#dfe4e9] bg-[#f7f8fa] px-4 py-3 sm:flex-row sm:items-center"
 										>
-											<p class="text-xs leading-5 text-[#6a7684] sm:text-right">
+											{#if ungradedQuestions[0]}<button
+													type="button"
+													class="btn-secondary shrink-0"
+													onclick={() => focusScore(ungradedQuestions[0].id)}
+													>미채점으로 이동 · {ungradedQuestions.length}</button
+												>{/if}
+											<p class="flex-1 text-xs leading-5 text-[#6a7684] sm:text-right">
 												입력한 점수를 한 번에 저장합니다. 빈 점수는 기존 상태를 유지합니다.
 											</p>
 											<button class="btn shrink-0" disabled={savingGrades}
@@ -1042,6 +1131,27 @@
 							<div class="mb-3 flex items-baseline justify-between">
 								<h2 class="text-lg font-bold">응시 결과</h2>
 								<span class="text-xs text-stone-500">총 {data.attempts?.length ?? 0}명</span>
+							</div>
+							<div class="mb-4 flex flex-wrap items-end gap-3">
+								<label class="min-w-0 flex-1 text-xs font-semibold"
+									>응시자 검색<input
+										class="mt-2 w-full"
+										type="search"
+										placeholder="이름 또는 Discord ID…"
+										bind:value={resultSearch}
+									/></label
+								>
+								<label class="text-xs font-semibold"
+									>응시 상태<select class="mt-2 block" bind:value={resultStatus}
+										><option value="all">전체</option><option value="running">응시 중</option
+										><option value="paused">일시 중지</option><option value="pending"
+											>채점 필요</option
+										><option value="graded">채점 완료</option></select
+									></label
+								>
+								<p role="status" class="py-2 text-xs text-stone-500">
+									{filteredAttempts.length}명 표시
+								</p>
 							</div>
 							<div class="border-ink overflow-x-auto border-t">
 								<table class="w-full min-w-[1240px] text-left text-sm">
@@ -1060,7 +1170,7 @@
 										</tr>
 									</thead>
 									<tbody>
-										{#each data.attempts ?? [] as a}
+										{#each filteredAttempts as a}
 											<tr class="border-line border-b">
 												<td class="p-3 font-semibold">
 													{#if a.submittedAt}
@@ -1170,6 +1280,11 @@
 												</td>
 											</tr>
 										{/each}
+										{#if !filteredAttempts.length}<tr
+												><td colspan="10" class="p-8 text-center text-sm text-stone-500"
+													>검색 조건에 맞는 항목이 없습니다. 검색어 또는 상태를 바꿔 주세요.</td
+												></tr
+											>{/if}
 									</tbody>
 								</table>
 							</div>
