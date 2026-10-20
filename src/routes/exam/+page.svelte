@@ -579,13 +579,19 @@
 								aria-current={i === index ? 'step' : undefined}
 								disabled={answerLocked}
 								onclick={() => goToQuestion(i)}
-								class="h-8 min-w-0 border text-xs font-semibold transition-colors {i === index
+								class="relative h-8 min-w-0 border text-xs font-semibold transition-colors {i ===
+								index
 									? 'border-[#087ba8] bg-[#087ba8] text-white'
 									: values[item.id]?.trim()
 										? 'border-[#b7dce9] bg-[#effbff] text-[#087ba8]'
 										: 'border-line bg-white'}"
-								>{i + 1}{reviewIds.includes(item.id) ? ' ★' : ''}</button
 							>
+								<span>{i + 1}</span>
+								{#if reviewIds.includes(item.id)}<span
+										aria-hidden="true"
+										class="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-[#b45309] ring-1 ring-white"
+									></span>{/if}
+							</button>
 						{/each}
 					</div>
 					{#if !visibleQuestions.length}<p role="status" class="text-xs leading-5">
@@ -594,7 +600,7 @@
 								: '모든 문제에 답했습니다.'}
 						</p>{/if}
 					<p class="mt-4 border-t border-[#bfd4df] pt-3 text-[11px] leading-5 text-[#52616e]">
-						연한 파랑: 답한 문제<br />진한 파랑: 지금 보는 문제<br />★: 다시 볼 문제
+						연한 파랑: 답한 문제<br />진한 파랑: 지금 보는 문제<br />주황색 점: 다시 볼 문제
 					</p>
 					<p class="mt-3 text-[11px] leading-5 text-[#52616e]">
 						Shift + Enter: 다음 문제<br />1–5: 객관식 선택{q?.allowsMultipleAnswers ? '/해제' : ''}
@@ -635,11 +641,11 @@
 								</h1>
 								<button
 									type="button"
-									class="btn-secondary mt-4"
+									class="btn-secondary mt-4 aria-pressed:border-[#b45309] aria-pressed:bg-[#fff7ed] aria-pressed:text-[#92400e]"
 									aria-pressed={reviewIds.includes(q.id)}
 									disabled={answerLocked}
 									onclick={toggleReview}
-									>{reviewIds.includes(q.id) ? '★ 다시 보기 해제' : '☆ 나중에 다시 보기'}</button
+									>{reviewIds.includes(q.id) ? '다시 보기 해제' : '나중에 다시 보기'}</button
 								>
 							</div>
 							{#if q.type === 'multiple'}
@@ -744,7 +750,7 @@
 							{#each reviewQuestions as { i }}<button
 									type="button"
 									class="btn-secondary"
-									onclick={() => goToQuestion(i)}>{i + 1}번 ★</button
+									onclick={() => goToQuestion(i)}>{i + 1}번</button
 								>{/each}
 						</div>
 					</div>
