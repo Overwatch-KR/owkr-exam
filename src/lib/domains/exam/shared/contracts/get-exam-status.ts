@@ -7,6 +7,7 @@ export const getExamStatusInputSchema = z.object({
 
 export const getExamStatusResultSchema = z.object({
 	expiresAt: z.iso.datetime(),
+	addedMinutes: z.number().int().nonnegative(),
 	pausedAt: z.iso.datetime().nullable(),
 	submittedAt: z.iso.datetime().nullable(),
 	timedOut: z.boolean(),

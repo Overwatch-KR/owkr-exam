@@ -10,7 +10,6 @@ const pauseAttempt: AdminAction = async (event) => {
 	admin(event);
 	const data = await event.request.formData();
 	const attemptId = String(data.get('id'));
-	const now = new Date();
 	const state = await database().transaction(async (tx) => {
 		const [attempt] = await tx
 			.select()
@@ -20,6 +19,7 @@ const pauseAttempt: AdminAction = async (event) => {
 		if (!attempt) return 'missing' as const;
 		if (attempt.submittedAt) return 'submitted' as const;
 		if (attempt.pausedAt) return 'paused' as const;
+		const now = new Date();
 		if (attempt.expiresAt <= now) return 'expired' as const;
 		await tx.update(attempts).set({ pausedAt: now }).where(eq(attempts.id, attempt.id));
 		return 'updated' as const;
@@ -74,7 +74,6 @@ const extendAttempt: AdminAction = async (event) => {
 	if (!Number.isInteger(minutes) || minutes < 1 || minutes > 180) {
 		return fail(400, { message: '추가 시간은 1분부터 180분까지 입력해 주세요.' });
 	}
-	const now = new Date();
 	const state = await database().transaction(async (tx) => {
 		const [attempt] = await tx
 			.select()
@@ -83,10 +82,14 @@ const extendAttempt: AdminAction = async (event) => {
 			.for('update');
 		if (!attempt) return 'missing' as const;
 		if (attempt.submittedAt) return 'submitted' as const;
+		const now = new Date();
 		if (!attempt.pausedAt && attempt.expiresAt <= now) return 'expired' as const;
 		await tx
 			.update(attempts)
-			.set({ expiresAt: new Date(attempt.expiresAt.getTime() + minutes * 60_000) })
+			.set({
+				expiresAt: new Date(attempt.expiresAt.getTime() + minutes * 60_000),
+				addedMinutes: attempt.addedMinutes + minutes
+			})
 			.where(eq(attempts.id, attempt.id));
 		return 'updated' as const;
 	});

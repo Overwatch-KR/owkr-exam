@@ -6,3 +6,4 @@ export { saveAnswer } from './use-cases/save-answer';
 export { startExam } from './use-cases/start-exam';
 export { submitExam } from './use-cases/submit-exam';
 export type { ExamUser } from './user';
+export { controlExamTime } from './use-cases/control-exam-time';

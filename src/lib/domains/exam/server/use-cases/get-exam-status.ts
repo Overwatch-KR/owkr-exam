@@ -24,6 +24,7 @@ export async function getExamStatus(
 	}
 	return {
 		expiresAt: attempt.expiresAt.toISOString(),
+		addedMinutes: attempt.addedMinutes,
 		pausedAt: attempt.pausedAt?.toISOString() ?? null,
 		submittedAt: attempt.submittedAt?.toISOString() ?? null,
 		timedOut: attempt.timedOut,

@@ -404,7 +404,7 @@
 								<p class="mt-2 font-mono text-3xl font-bold text-[#087ba8]">
 									{data.overview.needsGradingCount}
 								</p>
-								<p class="mt-1 text-xs text-[#6a7684]">제출된 답안 중 검토 대기</p>
+								<p class="mt-1 text-xs text-[#6a7684]">채점을 기다리는 답안</p>
 							</div>
 							<div class="card p-5">
 								<p class="text-xs font-semibold text-[#6a7684]">응시 중</p>
@@ -759,7 +759,7 @@
 							<div class="border-line bg-white p-5 sm:p-6">
 								<div class="mb-4 flex items-baseline justify-between">
 									<h2 class="text-lg font-bold">등록된 문제</h2>
-									<span class="text-xs text-stone-500">총 {data.questions?.length ?? 0}문항</span>
+									<span class="text-xs text-stone-500">총 {data.questions?.length ?? 0}문제</span>
 								</div>
 								<div class="mb-4 flex flex-wrap items-end gap-3">
 									<label class="min-w-0 flex-1 text-xs font-semibold"
@@ -778,7 +778,7 @@
 										></label
 									>
 									<p role="status" class="py-2 text-xs text-stone-500">
-										{filteredQuestions.length}문항 표시
+										{filteredQuestions.length}문제 표시
 									</p>
 								</div>
 								<div class="border-ink overflow-x-auto border-t">
@@ -957,7 +957,7 @@
 									class="mt-5 border-l-2 border-[#087ba8] bg-[#effbff] px-3 py-2 text-xs leading-5 text-[#34404d]"
 								>
 									{data.grading.gradedCount}
-									/{data.grading.questions.length}문항 채점됨 · 서술형과 논술형 합산은 {data.grading
+									/{data.grading.questions.length}문제 채점됨 · 서술형과 논술형 합산은 {data.grading
 										.writingMaxScore}점 만점 중 {data.grading.writingPassScore}점 미만이면
 									탈락입니다. 모든 단답형·서술형·논술형 점수가 입력되면 총점이 확정됩니다.
 								</p>
@@ -1007,7 +1007,7 @@
 															{/each}
 														</div>
 													{:else}
-														<p class="mt-3 text-sm text-[#6a7684]">(미응답)</p>
+														<p class="mt-3 text-sm text-[#6a7684]">(작성한 답안이 없습니다)</p>
 													{/if}
 												</article>
 											{/each}
@@ -1025,7 +1025,7 @@
 									<input type="hidden" name="attemptId" value={data.grading.attempt.id} />
 									<div class="border-line mb-5 border-b pb-4">
 										<p role="status" class="text-sm font-semibold">
-											미채점 {ungradedQuestions.length}문항
+											점수를 아직 입력하지 않은 문제 {ungradedQuestions.length}개
 										</p>
 										<p class="mt-1 text-xs text-stone-500">
 											번호를 누르면 점수 입력란으로 이동합니다. 입력한 점수는 저장 버튼을 눌러야
@@ -1051,7 +1051,9 @@
 																: '서술형'}
 													</p>
 													<p class="text-xs text-[#6a7684]">
-														배점 {q.points}점 · 현재 {q.score ?? '미채점'}
+														{q.points}점 문제 · {q.score === null
+															? '아직 채점하지 않았습니다'
+															: `저장된 점수 ${q.score}점`}
 													</p>
 												</div>
 												<h3 class="mt-4 text-sm leading-6 font-semibold whitespace-pre-wrap">
@@ -1060,7 +1062,7 @@
 												<div
 													class="mt-4 min-h-20 border border-[#dfe4e9] bg-[#f7f8fa] p-4 text-sm leading-6 whitespace-pre-wrap text-[#34404d]"
 												>
-													{q.answer || '(미응답)'}
+													{q.answer || '(작성한 답안이 없습니다)'}
 												</div>
 												<div
 													class="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
@@ -1115,13 +1117,13 @@
 													type="button"
 													class="btn-secondary shrink-0"
 													onclick={() => focusScore(ungradedQuestions[0].id)}
-													>미채점으로 이동 · {ungradedQuestions.length}</button
+													>점수 안 넣은 문제 · {ungradedQuestions.length}</button
 												>{/if}
 											<p class="flex-1 text-xs leading-5 text-[#6a7684] sm:text-right">
-												입력한 점수를 한 번에 저장합니다. 빈 점수는 기존 상태를 유지합니다.
+												입력한 점수를 모두 저장합니다. 비워 둔 점수는 바뀌지 않습니다.
 											</p>
 											<button class="btn shrink-0" disabled={savingGrades}
-												>{savingGrades ? '채점 저장 중…' : '채점 점수 한 번에 저장'}</button
+												>{savingGrades ? '채점 저장 중…' : '입력한 점수 저장'}</button
 											>
 										</div>
 									</div>
@@ -1248,14 +1250,31 @@
 																	name="minutes"
 																	value="5"
 																	class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
-																	>+5분</button
+																	>5분 추가</button
 																>
 																<button
 																	name="minutes"
 																	value="10"
 																	class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
-																	>+10분</button
+																	>10분 추가</button
 																>
+															</form>
+															<form
+																method="POST"
+																action="?/extendAttempt"
+																class="flex items-center gap-2"
+															>
+																<input type="hidden" name="id" value={a.id} /><input
+																	type="number"
+																	name="minutes"
+																	min="1"
+																	max="180"
+																	step="1"
+																	required
+																	value="5"
+																	aria-label={a.displayName + '님에게 추가할 시간(분)'}
+																	class="w-20"
+																/><button class="btn-secondary whitespace-nowrap">분 추가</button>
 															</form>
 														</div>
 													{/if}

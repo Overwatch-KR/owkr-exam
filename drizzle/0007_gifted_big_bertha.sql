@@ -1,0 +1,1 @@
+ALTER TABLE "exam_attempts" ADD COLUMN "added_minutes" integer DEFAULT 0 NOT NULL;

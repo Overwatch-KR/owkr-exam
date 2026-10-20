@@ -51,6 +51,7 @@ export const attempts = pgTable(
 		startedAt: timestamp('started_at').notNull(),
 		expiresAt: timestamp('expires_at').notNull(),
 		pausedAt: timestamp('paused_at'),
+		addedMinutes: integer('added_minutes').notNull().default(0),
 		submittedAt: timestamp('submitted_at'),
 		timedOut: boolean('timed_out').notNull().default(false),
 		objectiveScore: numeric('objective_score', { precision: 10, scale: 2, mode: 'number' })
