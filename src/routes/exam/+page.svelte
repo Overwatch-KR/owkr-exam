@@ -4,6 +4,7 @@
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import {
 		examErrorMessage,
+		controlExamTime,
 		getExamStatus,
 		saveAnswer,
 		startExam,
@@ -25,6 +26,62 @@
 	let attempt = $state<ExamSession | null>(null);
 	let index = $state(0);
 	let values = $state<Record<string, string>>({});
+	let timeChanging = $state(false);
+	let timeControlError = $state('');
+	let timeNotice = $state('');
+	let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+	let statusRevision = 0;
+	function announceAddedTime(minutes: number) {
+		timeNotice = minutes + '분이 추가되었습니다.';
+		clearTimeout(noticeTimer);
+		noticeTimer = setTimeout(() => (timeNotice = ''), 7000);
+	}
+	async function changeTime(action: 'pause' | 'resume') {
+		if (!attempt || attempt.submittedAt || timeChanging || submitting) return;
+		timeChanging = true;
+		statusRevision += 1;
+		timeControlError = '';
+		try {
+			if (action === 'pause') await flushPendingAnswers();
+			const status = await controlExamTime({ attemptId: attempt.id, action });
+			if (status.addedMinutes > attempt.addedMinutes)
+				announceAddedTime(status.addedMinutes - attempt.addedMinutes);
+			serverTimeOffset = new Date(status.serverNow).getTime() - Date.now();
+			attempt = {
+				...attempt,
+				expiresAt: status.expiresAt,
+				pausedAt: status.pausedAt,
+				addedMinutes: status.addedMinutes
+			};
+			confirm = false;
+			updateRemaining();
+			if (status.pausedAt) {
+				clearPendingSaveTimers();
+				await tick();
+				document.getElementById('paused-heading')?.focus();
+			} else {
+				await restoreQuestions();
+				if (dirtyAnswerIds.size) await flushPendingAnswers();
+			}
+		} catch (error) {
+			timeControlError = examErrorMessage(
+				error,
+				'시간을 변경하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.'
+			);
+		} finally {
+			timeChanging = false;
+			await syncStatus();
+		}
+	}
+	async function restoreQuestions() {
+		if (!attempt || attempt.pausedAt || attempt.questions.length) return;
+		const restored = await startExam({ code });
+		attempt = restored;
+		values = {
+			...Object.fromEntries(restored.questions.map((item) => [item.id, item.answer])),
+			...values
+		};
+	}
 	let saveError = $state('');
 	let pendingAnswerCount = $state(0);
 	let retryingSave = $state(false);
@@ -72,14 +129,14 @@
 	let allAnswered = $derived(
 		Boolean(attempt?.questions.length) && answeredCount === attempt?.questions.length
 	);
-	let answerLocked = $derived(Boolean(attempt?.pausedAt) || submitting);
+	let answerLocked = $derived(Boolean(attempt?.pausedAt) || submitting || timeChanging);
 	let questionCount = $derived(data.examSummary.reduce((sum, item) => sum + item.count, 0));
 	let totalPoints = $derived(data.examSummary.reduce((sum, item) => sum + item.points, 0));
 	onMount(() => {
 		const timer = setInterval(() => {
 			if (attempt && !attempt.submittedAt) {
 				updateRemaining();
-				if (!attempt.pausedAt && !remaining) submit(true);
+				if (!attempt.pausedAt && !remaining && !timeChanging) submit(true);
 			}
 		}, 1000);
 		const statusTimer = setInterval(() => void syncStatus(), 3000);
@@ -135,6 +192,7 @@
 		return () => {
 			clearInterval(timer);
 			clearInterval(statusTimer);
+			clearTimeout(noticeTimer);
 			clearPendingSaveTimers();
 			removeEventListener('pageshow', onShow);
 			removeEventListener('popstate', onPop);
@@ -315,19 +373,32 @@
 	}
 
 	async function syncStatus() {
-		if (!attempt || attempt.submittedAt || statusSyncing) return;
+		if (!attempt || attempt.submittedAt || statusSyncing || timeChanging) return;
 		statusSyncing = true;
+		const revision = statusRevision;
 		try {
 			const wasPaused = Boolean(attempt.pausedAt);
 			const status = await getExamStatus({ attemptId: attempt.id });
+			if (revision !== statusRevision || timeChanging) return;
+			if (status.addedMinutes > attempt.addedMinutes)
+				announceAddedTime(status.addedMinutes - attempt.addedMinutes);
 			serverTimeOffset = new Date(status.serverNow).getTime() - Date.now();
 			attempt = {
 				...attempt,
 				expiresAt: status.expiresAt,
-				pausedAt: status.pausedAt
+				pausedAt: status.pausedAt,
+				addedMinutes: status.addedMinutes
 			};
 			updateRemaining();
-			if (!wasPaused && status.pausedAt) clearPendingSaveTimers();
+			if (status.pausedAt) {
+				clearPendingSaveTimers();
+				confirm = false;
+				if (!wasPaused) {
+					await tick();
+					document.getElementById('paused-heading')?.focus();
+				}
+			}
+			if (!status.pausedAt && !status.submittedAt) await restoreQuestions();
 			if (wasPaused && !status.pausedAt && dirtyAnswerIds.size) {
 				void flushPendingAnswers().catch(() => undefined);
 			}
@@ -343,6 +414,13 @@
 		}
 	}
 </script>
+
+{#if timeNotice}<div
+		role="status"
+		class="fixed top-4 right-4 z-50 max-w-[calc(100vw-2rem)] border border-[#b7dce9] bg-white px-4 py-3 text-sm font-semibold text-[#075c7d] shadow-md"
+	>
+		{timeNotice}
+	</div>{/if}
 
 {#if !attempt && !readyToStart}
 	<main class="min-h-screen bg-[#f7f8fa]">
@@ -494,13 +572,41 @@
 			</div>
 		</section>
 	</main>
+{:else if attempt.pausedAt}
+	<main class="flex min-h-screen items-center justify-center bg-[#f3f5f7] px-5 py-10">
+		<section class="w-full max-w-md border border-[#d5dce2] bg-white p-8 text-center">
+			<p class="wordmark">OWKR EXAM</p>
+			<h1 id="paused-heading" tabindex="-1" class="mt-7 text-2xl font-bold">
+				시험이 잠시 정지되었습니다.
+			</h1>
+			<p class="mt-4 text-sm leading-6 text-[#52616e]">
+				정지 중에는 시간이 줄어들지 않습니다.<br />준비가 되면 시험을 다시 시작해 주세요.
+			</p>
+			{#if timeControlError}<p role="alert" class="notice-error mt-5">{timeControlError}</p>{/if}
+			<button
+				type="button"
+				class="btn mt-7 w-full"
+				disabled={timeChanging}
+				onclick={() => changeTime('resume')}
+				>{timeChanging ? '시험을 다시 시작하는 중…' : '시험 다시 시작'}</button
+			>
+		</section>
+	</main>
 {:else}
 	<main class="min-h-screen bg-[#f3f5f7]">
 		<header class="site-header sticky top-0 z-30 bg-white shadow-sm">
 			<div
 				class="mx-auto flex min-h-20 max-w-[1200px] items-center justify-between gap-3 px-5 py-3 sm:px-8"
 			>
-				<span class="wordmark">OWKR EXAM</span>
+				<div>
+					<span class="wordmark">OWKR EXAM</span><button
+						type="button"
+						class="btn-secondary ml-3 text-xs"
+						disabled={answerLocked}
+						onclick={() => changeTime('pause')}
+						>{timeChanging ? '답안을 저장하고 정지하는 중…' : '잠시 정지'}</button
+					>
+				</div>
 				<div class="text-right">
 					<p class="text-[10px] font-semibold tracking-[0.12em] text-[#6a7684]">
 						{attempt.pausedAt ? '시험 일시 중지' : '남은 시간'}
@@ -538,18 +644,9 @@
 					{/if}
 				</div>
 			</div>
-			{#if attempt.pausedAt}
-				<div
-					role="status"
-					aria-live="polite"
-					class="mb-5 border border-[#b8d8e5] bg-[#effbff] px-4 py-3 text-sm text-[#34404d]"
-				>
-					<p class="font-bold text-[#087ba8]">관리자가 시험 시간을 일시 중지했습니다.</p>
-					<p class="mt-1 text-xs leading-5">
-						남은 시간은 줄어들지 않으며, 재개될 때까지 답안을 수정할 수 없습니다.
-					</p>
-				</div>
-			{/if}
+
+			{#if timeControlError}<p role="alert" class="notice-error mb-4">{timeControlError}</p>{/if}
+
 			<div class="grid gap-5 md:grid-cols-[184px_minmax(0,1fr)]">
 				<aside
 					class="order-2 h-fit border border-[#d5dce2] bg-white p-3 md:sticky md:top-24 md:order-1 md:max-h-[calc(100dvh-7rem)] md:overflow-y-auto"

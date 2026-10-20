@@ -1250,14 +1250,31 @@
 																	name="minutes"
 																	value="5"
 																	class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
-																	>+5분</button
+																	>5분 추가</button
 																>
 																<button
 																	name="minutes"
 																	value="10"
 																	class="text-xs font-bold text-[#087ba8] underline underline-offset-4"
-																	>+10분</button
+																	>10분 추가</button
 																>
+															</form>
+															<form
+																method="POST"
+																action="?/extendAttempt"
+																class="flex items-center gap-2"
+															>
+																<input type="hidden" name="id" value={a.id} /><input
+																	type="number"
+																	name="minutes"
+																	min="1"
+																	max="180"
+																	step="1"
+																	required
+																	value="5"
+																	aria-label={a.displayName + '님에게 추가할 시간(분)'}
+																	class="w-20"
+																/><button class="btn-secondary whitespace-nowrap">분 추가</button>
 															</form>
 														</div>
 													{/if}
