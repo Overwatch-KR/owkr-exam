@@ -126,7 +126,7 @@
 	let answeredCount = $derived(
 		attempt?.questions.filter((item) => values[item.id]?.trim()).length ?? 0
 	);
-	let allAnswered = $derived(
+	let hasAnswerForEveryQuestion = $derived(
 		Boolean(attempt?.questions.length) && answeredCount === attempt?.questions.length
 	);
 	let answerLocked = $derived(Boolean(attempt?.pausedAt) || submitting || timeChanging);
@@ -694,7 +694,7 @@
 					{#if !visibleQuestions.length}<p role="status" class="text-xs leading-5">
 							{questionFilter === 'review'
 								? '나중에 다시 볼 문제가 없습니다.'
-								: '모든 문제에 답했습니다.'}
+								: '답안이 비어 있는 문제가 없습니다.'}
 						</p>{/if}
 					<p class="mt-4 border-t border-[#bfd4df] pt-3 text-[11px] leading-5 text-[#52616e]">
 						연한 파랑: 답한 문제<br />진한 파랑: 지금 보는 문제<br />주황색 점: 다시 볼 문제
@@ -702,17 +702,15 @@
 					<p class="mt-3 text-[11px] leading-5 text-[#52616e]">
 						Shift + Enter: 다음 문제<br />1–5: 객관식 선택{q?.allowsMultipleAnswers ? '/해제' : ''}
 					</p>
-					{#if allAnswered}
-						<p id="all-answered" class="mt-4 text-center text-xs font-semibold text-[#087ba8]">
-							모든 문제에 답했습니다.
+					{#if hasAnswerForEveryQuestion}
+						<p id="answer-entry-status" class="mt-4 text-xs leading-5 text-[#52616e]">
+							모든 문항에 답안이 입력되어 있습니다. 작성 중인 답안을 마무리한 뒤 제출해 주세요.
 						</p>
 					{/if}
 					<button
 						type="button"
-						class={allAnswered
-							? 'btn mt-3 w-full ring-2 ring-[#087ba8]/20 ring-offset-2'
-							: 'btn mt-5 w-full'}
-						aria-describedby={allAnswered ? 'all-answered' : undefined}
+						class="btn mt-5 w-full"
+						aria-describedby={hasAnswerForEveryQuestion ? 'answer-entry-status' : undefined}
 						disabled={submitting || Boolean(attempt.pausedAt)}
 						onclick={() => (confirm = true)}>답안 제출</button
 					>
