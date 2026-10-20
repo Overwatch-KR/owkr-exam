@@ -3,6 +3,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { codeStatusLabel, questionTypeLabel } from '$lib/admin/presentation';
+	import AdminSelect from '$lib/components/admin-select.svelte';
 	import AdminBreadcrumbs from '$lib/components/admin-breadcrumbs.svelte';
 	import QuestionEditor from '$lib/components/question-editor.svelte';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
@@ -770,13 +771,15 @@
 											bind:value={questionSearch}
 										/></label
 									>
-									<label class="text-xs font-semibold"
-										>문제 상태<select class="mt-2 block" bind:value={questionStatus}
-											><option value="all">전체</option><option value="active">활성</option><option
-												value="inactive">비활성</option
-											></select
-										></label
-									>
+									<AdminSelect
+										label="문제 상태"
+										bind:value={questionStatus}
+										options={[
+											{ value: 'all', label: '전체' },
+											{ value: 'active', label: '활성' },
+											{ value: 'inactive', label: '비활성' }
+										]}
+									/>
 									<p role="status" class="py-2 text-xs text-stone-500">
 										{filteredQuestions.length}문제 표시
 									</p>
@@ -1143,14 +1146,17 @@
 										bind:value={resultSearch}
 									/></label
 								>
-								<label class="text-xs font-semibold"
-									>응시 상태<select class="mt-2 block" bind:value={resultStatus}
-										><option value="all">전체</option><option value="running">응시 중</option
-										><option value="paused">일시 중지</option><option value="pending"
-											>채점 필요</option
-										><option value="graded">채점 완료</option></select
-									></label
-								>
+								<AdminSelect
+									label="응시 상태"
+									bind:value={resultStatus}
+									options={[
+										{ value: 'all', label: '전체' },
+										{ value: 'running', label: '응시 중' },
+										{ value: 'paused', label: '일시 중지' },
+										{ value: 'pending', label: '채점 필요' },
+										{ value: 'graded', label: '채점 완료' }
+									]}
+								/>
 								<p role="status" class="py-2 text-xs text-stone-500">
 									{filteredAttempts.length}명 표시
 								</p>
