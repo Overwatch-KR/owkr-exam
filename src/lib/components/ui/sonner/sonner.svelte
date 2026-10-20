@@ -32,7 +32,8 @@
 	duration={4200}
 	toastOptions={{
 		class:
-			'rounded-2xl! border-[#e5e8eb]! bg-white/95! px-4! py-3.5! shadow-[0_12px_32px_rgba(25,31,40,0.14)]! backdrop-blur-xl!'
+			'rounded-md! border-[var(--app-line)]! bg-[var(--app-surface)]! text-[var(--app-ink)]! px-4! py-3.5! shadow-lg!',
+		classes: { description: 'text-[var(--app-body)]!' }
 	}}
 	containerAriaLabel="알림"
 	closeButtonAriaLabel="알림 닫기"
