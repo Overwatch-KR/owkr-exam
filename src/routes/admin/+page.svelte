@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { pushState } from '$app/navigation';
+	import { beforeNavigate, pushState } from '$app/navigation';
 	import { onMount, untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { codeStatusLabel, questionTypeLabel } from '$lib/admin/presentation';
@@ -41,6 +41,28 @@
 	const tab = $derived(sectionOf(data));
 	const activeSection = $derived(tab);
 	let editingQuestion = $state(false);
+	let questionDirty = $state(false);
+	let gradingDirty = $state(false);
+	let savingGrades = $state(false);
+	function setQuestionDirty(dirty: boolean) {
+		questionDirty = dirty;
+	}
+	function allowDiscardQuestion() {
+		return (
+			!questionDirty ||
+			window.confirm('저장하지 않은 문제 수정 내용이 있습니다. 변경 내용을 버릴까요?')
+		);
+	}
+	beforeNavigate((navigation) => {
+		if (!navigation.willUnload && questionDirty && !allowDiscardQuestion()) navigation.cancel();
+		if (
+			!navigation.willUnload &&
+			gradingDirty &&
+			!savingGrades &&
+			!window.confirm('저장하지 않은 채점 점수가 있습니다. 변경 내용을 버리고 이동할까요?')
+		)
+			navigation.cancel();
+	});
 	let deleteQuestionOpen = $state(false);
 	let dismissedConflictRevision = $state<number | null>(null);
 	let conflictForEditing = $state<QuestionConflict | null>(null);
@@ -65,12 +87,38 @@
 		const input = document.getElementById(`score-${questionId}`) as HTMLInputElement | null;
 		if (!input) return;
 		input.value = String(score);
+		gradingDirty = true;
 		input.focus();
 	}
 
 	onMount(() => {
 		const timer = setInterval(() => (adminNow = Date.now()), 1000);
-		return () => clearInterval(timer);
+		const onPopState = () => {
+			if (tab !== 'questions') return;
+			if (!allowDiscardQuestion()) {
+				pushState(
+					data.selectedQuestion
+						? `/admin/questions?question=${data.selectedQuestion.id}#question-detail`
+						: '/admin/questions',
+					{}
+				);
+				return;
+			}
+			const selectedId = new URL(location.href).searchParams.get('question');
+			editingQuestion = false;
+			questionDirty = false;
+			conflictForEditing = null;
+			deleteQuestionOpen = false;
+			data = {
+				...data,
+				selectedQuestion: data.questions?.find((question) => question.id === selectedId) ?? null
+			} as typeof initialData;
+		};
+		addEventListener('popstate', onPopState);
+		return () => {
+			clearInterval(timer);
+			removeEventListener('popstate', onPopState);
+		};
 	});
 	const correctOptionIndices = (question: {
 		correctAnswer: number | null;
@@ -82,6 +130,7 @@
 				? []
 				: [question.correctAnswer];
 	function answerOptionIndices(value: string) {
+		if (!value.trim()) return [];
 		try {
 			const parsed = JSON.parse(value);
 			if (Array.isArray(parsed)) return parsed.filter(Number.isInteger);
@@ -130,9 +179,12 @@
 	}
 
 	function openQuestion(event: MouseEvent, question: NonNullable<typeof data.questions>[number]) {
+		if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+			return;
 		event.preventDefault();
 		if (tab !== 'questions' || !data.questions) return;
 		editingQuestion = false;
+		conflictForEditing = null;
 		data = { ...data, selectedQuestion: question } as typeof initialData;
 		deleteQuestionOpen = false;
 		pushState(`/admin/questions?question=${question.id}#question-detail`, {});
@@ -140,9 +192,13 @@
 	}
 
 	function closeQuestion(event: MouseEvent) {
+		if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+			return;
 		event.preventDefault();
 		if (tab !== 'questions') return;
+		if (!allowDiscardQuestion()) return;
 		editingQuestion = false;
+		conflictForEditing = null;
 		deleteQuestionOpen = false;
 		data = { ...data, selectedQuestion: null } as typeof initialData;
 		pushState('/admin/questions', {});
@@ -211,6 +267,14 @@
 		}
 	}
 </script>
+
+<svelte:window
+	onbeforeunload={(event) => {
+		if (!gradingDirty || savingGrades) return;
+		event.preventDefault();
+		event.returnValue = '';
+	}}
+/>
 
 <main class="min-h-screen bg-[#f5f6f8]">
 	<header class="site-header">
@@ -414,7 +478,7 @@
 								사본은 바뀌지 않습니다.
 							</p>
 						</div>
-						<QuestionEditor action="?/question" />
+						<QuestionEditor action="?/question" onDirtyChange={setQuestionDirty} />
 					</section>
 				{:else if tab === 'questions'}
 					<section class="pt-5 pb-8">
@@ -438,6 +502,7 @@
 											type="button"
 											class="text-xs font-semibold text-[#087ba8] underline underline-offset-4"
 											onclick={() => {
+												if (editingQuestion && !allowDiscardQuestion()) return;
 												editingQuestion = !editingQuestion;
 												if (!editingQuestion) conflictForEditing = null;
 											}}>{editingQuestion ? '수정 취소' : '문제 수정'}</button
@@ -458,12 +523,15 @@
 								</p>
 								{#if editingQuestion}
 									<div class="mt-5">
-										<QuestionEditor
-											action="?/updateQuestion"
-											question={conflictForEditing?.latest ?? data.selectedQuestion}
-											draft={conflictForEditing?.draft ?? null}
-											submitLabel="수정 내용 저장"
-										/>
+										{#key conflictForEditing?.latest.revision ?? data.selectedQuestion.id}
+											<QuestionEditor
+												action="?/updateQuestion"
+												question={conflictForEditing?.latest ?? data.selectedQuestion}
+												onDirtyChange={setQuestionDirty}
+												draft={conflictForEditing?.draft ?? null}
+												submitLabel="수정 내용 저장"
+											/>
+										{/key}
 									</div>
 								{:else}
 									<h2
@@ -844,7 +912,9 @@
 														</p>
 														<p class="text-xs text-[#6a7684]">배점 {q.points}점</p>
 													</div>
-													<p class="mt-3 line-clamp-2 text-sm leading-6 font-semibold">
+													<p
+														class="mt-3 text-sm leading-6 font-semibold break-words whitespace-pre-wrap"
+													>
 														{q.content}
 													</p>
 													{#if q.answer !== '' && answerOptionIndices(q.answer).length}
@@ -881,7 +951,13 @@
 									</section>
 								{/if}
 
-								<form method="POST" action="?/gradeAll" class="mt-6">
+								<form
+									method="POST"
+									action="?/gradeAll"
+									class="mt-6"
+									oninput={() => (gradingDirty = true)}
+									onsubmit={() => (savingGrades = true)}
+								>
 									<input type="hidden" name="attemptId" value={data.grading.attempt.id} />
 									<div class="space-y-4">
 										{#each data.grading.questions as q}
@@ -939,6 +1015,7 @@
 															type="number"
 															step="0.01"
 															min="0"
+															max={q.points}
 															value={q.score ?? ''}
 															class="w-24"
 														/>
@@ -954,7 +1031,9 @@
 											<p class="text-xs leading-5 text-[#6a7684] sm:text-right">
 												입력한 점수를 한 번에 저장합니다. 빈 점수는 기존 상태를 유지합니다.
 											</p>
-											<button class="btn shrink-0">채점 점수 한 번에 저장</button>
+											<button class="btn shrink-0" disabled={savingGrades}
+												>{savingGrades ? '채점 저장 중…' : '채점 점수 한 번에 저장'}</button
+											>
 										</div>
 									</div>
 								</form>
