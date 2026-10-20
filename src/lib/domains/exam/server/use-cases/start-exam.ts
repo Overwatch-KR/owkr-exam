@@ -118,8 +118,9 @@ export async function startExam(
 				id: attempt.id,
 				serverNow: new Date().toISOString(),
 				expiresAt: attempt.expiresAt.toISOString(),
+				addedMinutes: attempt.addedMinutes,
 				pausedAt: attempt.pausedAt?.toISOString() ?? null,
-				questions: examQuestionRows.map((question) => ({
+				questions: (attempt.pausedAt ? [] : examQuestionRows).map((question) => ({
 					id: question.id,
 					type: question.type as 'multiple' | 'short' | 'essay',
 					content: question.content,

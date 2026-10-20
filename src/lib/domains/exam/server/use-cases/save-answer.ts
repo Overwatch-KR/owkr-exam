@@ -60,7 +60,7 @@ export async function saveAnswer(
 			);
 		}
 		if (attempt.pausedAt) {
-			throw new ExamRequestError(409, '관리자가 시험 시간을 일시 중지했습니다.');
+			throw new ExamRequestError(409, '시험이 잠시 정지되었습니다. 다시 시작한 뒤 이용해 주세요.');
 		}
 		if (attempt.expiresAt <= new Date()) return { expiredAttemptId: attempt.id };
 

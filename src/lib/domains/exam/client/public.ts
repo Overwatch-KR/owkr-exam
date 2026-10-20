@@ -1,3 +1,4 @@
+import { controlExamTime as runControlExamTime } from './mutations/control-exam-time';
 import {
 	BoundraRuntimeError,
 	createBoundraClient,
@@ -10,12 +11,14 @@ import { startExam as runStartExam } from './mutations/start-exam';
 import { submitExam as runSubmitExam } from './mutations/submit-exam';
 import type {
 	GetExamStatusQueryInput,
+	ControlExamTimeMutationInput,
 	SaveAnswerMutationInput,
 	StartExamMutationInput,
 	SubmitExamMutationInput
 } from '../shared/public';
 
 const endpoints: Record<string, string> = {
+	'control-exam-time': '/api/exam/time',
 	'get-exam-status': '/api/exam/status',
 	'start-exam': '/api/exam/start',
 	'save-answer': '/api/exam/answer',
@@ -67,3 +70,8 @@ export function examErrorMessage(error: unknown, fallback: string) {
 }
 
 export type { ExamAttempt, ExamQuestion } from '../shared/public';
+
+export const controlExamTime = (
+	input: ControlExamTimeMutationInput,
+	options?: BoundraCallOptions
+) => runControlExamTime(client, input, options);

@@ -16,7 +16,7 @@ export async function submitExam(
 		throw new ExamRequestError(404, '진행 중인 시험이 없습니다.');
 	}
 	if (!attempt.submittedAt && attempt.pausedAt) {
-		throw new ExamRequestError(409, '관리자가 시험 시간을 일시 중지했습니다.');
+		throw new ExamRequestError(409, '시험이 잠시 정지되었습니다. 다시 시작한 뒤 이용해 주세요.');
 	}
 
 	const timedOut = attempt.submittedAt

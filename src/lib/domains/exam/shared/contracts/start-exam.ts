@@ -21,6 +21,7 @@ export const startExamInputSchema = z.object({
 export const startExamResultSchema = z.object({
 	id: z.string().uuid(),
 	expiresAt: z.iso.datetime(),
+	addedMinutes: z.number().int().nonnegative(),
 	serverNow: z.iso.datetime(),
 	pausedAt: z.iso.datetime().nullable(),
 	questions: z.array(examQuestionSchema)
