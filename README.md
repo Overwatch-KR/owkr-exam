@@ -18,6 +18,8 @@ OWKR 내전 운영진에 지원한 사람이 Discord 계정으로 로그인해 �
 - 시험에 사용할 문항을 관리하고 지정된 Discord 계정에 응시 코드를 발급합니다.
 - 응시 및 제출 내역을 확인하고 답안을 검토·채점합니다.
 
+[시험 변경 이력](CHANGELOG.md)
+
 ## 관련 OWKR 서비스
 
 - [OWKR Match](https://github.com/Overwatch-KR/owkr-balance) · 내전 팀 편성

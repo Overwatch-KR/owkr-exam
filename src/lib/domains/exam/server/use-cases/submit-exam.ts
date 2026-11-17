@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { database } from '$lib/server/db';
-import { attempts, examQuestions } from '$lib/server/schema';
+import { answers, attempts, examQuestions } from '$lib/server/schema';
 import { closeAttempt } from '../close-attempt';
 import type { SubmitExamMutationInput, SubmitExamMutationResult } from '../../shared/public';
 import { ExamRequestError } from '../errors';
@@ -15,22 +15,7 @@ export async function submitExam(
 	if (!attempt || attempt.discordId !== currentUser.id) {
 		throw new ExamRequestError(404, '진행 중인 시험이 없습니다.');
 	}
-	if (!attempt.submittedAt && attempt.pausedAt) {
-		throw new ExamRequestError(409, '시험이 잠시 정지되었습니다. 다시 시작한 뒤 이용해 주세요.');
-	}
-
-	const timedOut = attempt.submittedAt
-		? attempt.timedOut
-		: !attempt.pausedAt && attempt.expiresAt <= new Date();
-	if (!attempt.submittedAt && timeout && !timedOut) {
-		throw new ExamRequestError(
-			409,
-			attempt.pausedAt
-				? '관리자가 시험 시간을 일시 중지했습니다.'
-				: '시험 시간이 연장되었습니다. 남은 시간을 다시 확인해 주세요.'
-		);
-	}
-	const completed = await closeAttempt(attempt.id, timedOut);
+	const completed = await closeAttempt(attempt.id, timeout);
 	if (!completed?.submittedAt) {
 		throw new ExamRequestError(
 			409,
@@ -41,8 +26,9 @@ export async function submitExam(
 	}
 
 	const questions = await db
-		.select({ type: examQuestions.type, points: examQuestions.points })
+		.select({ type: examQuestions.type, points: examQuestions.points, value: answers.value })
 		.from(examQuestions)
+		.leftJoin(answers, eq(answers.attemptQuestionId, examQuestions.id))
 		.where(eq(examQuestions.attemptId, attempt.id));
 	const objectiveMaxScore = questions
 		.filter((question) => question.type === 'multiple')
@@ -50,6 +36,9 @@ export async function submitExam(
 	return {
 		submittedAt: completed.submittedAt.toISOString(),
 		objectiveScore: completed.objectiveScore,
-		objectiveMaxScore
+		objectiveMaxScore,
+		answeredCount: questions.filter((question) => question.value?.trim()).length,
+		questionCount: questions.length,
+		timedOut: completed.timedOut
 	};
 }
