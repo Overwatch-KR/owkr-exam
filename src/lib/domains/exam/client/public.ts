@@ -36,6 +36,8 @@ const transport: BoundraTransport = async (request, options) => {
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify(request.input),
 		signal: options?.signal
+			? AbortSignal.any([options.signal, AbortSignal.timeout(12000)])
+			: AbortSignal.timeout(12000)
 	});
 	const payload: unknown = await response.json();
 	if (!response.ok) {

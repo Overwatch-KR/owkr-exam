@@ -16,10 +16,15 @@
 		submittedAt?: string;
 		objectiveScore?: number;
 		objectiveMaxScore?: number;
+		answeredCount?: number;
+		questionCount?: number;
+		timedOut?: boolean;
 	};
 
 	let { data } = $props();
 	let code = $state('');
+	let resumeCode = $state('');
+	const resumeKey = 'owkr-exam-resume';
 	let message = $state('');
 	let readyToStart = $state(false);
 	let starting = $state(false);
@@ -77,11 +82,71 @@
 		if (!attempt || attempt.pausedAt || attempt.questions.length) return;
 		const restored = await startExam({ code });
 		attempt = restored;
-		values = {
-			...Object.fromEntries(restored.questions.map((item) => [item.id, item.answer])),
-			...values
-		};
+		hydrateAnswers(restored);
 	}
+	type ExamDraft = {
+		index: number;
+		reviewIds: string[];
+		answers: Record<string, { value: string; base: string }>;
+	};
+	const serverAnswers: Record<string, string> = {};
+	let draftAvailable = $state(true);
+	let draftConflict = $state(false);
+
+	function writeDraft() {
+		if (!attempt || attempt.submittedAt || !attempt.questions.length) return;
+		const draft: ExamDraft = {
+			index,
+			reviewIds: [...reviewIds],
+			answers: Object.fromEntries(
+				[...dirtyAnswerIds].map((id) => [
+					id,
+					{ value: values[id] ?? '', base: serverAnswers[id] ?? '' }
+				])
+			)
+		};
+		try {
+			sessionStorage.setItem('owkr-exam-draft:' + attempt.id, JSON.stringify(draft));
+			draftAvailable = true;
+		} catch {
+			draftAvailable = false;
+		}
+	}
+
+	function hydrateAnswers(session: ExamAttempt) {
+		if (!session.questions.length) return;
+		const saved = Object.fromEntries(session.questions.map(({ id, answer }) => [id, answer]));
+		Object.assign(serverAnswers, saved);
+		values = saved;
+		try {
+			const raw = sessionStorage.getItem('owkr-exam-draft:' + session.id);
+			if (!raw) return;
+			const draft = JSON.parse(raw) as Partial<ExamDraft>;
+			if (
+				typeof draft.index === 'number' &&
+				Number.isInteger(draft.index) &&
+				draft.index >= 0 &&
+				draft.index < session.questions.length
+			)
+				index = draft.index;
+			if (Array.isArray(draft.reviewIds))
+				reviewIds = draft.reviewIds.filter((id) => Object.hasOwn(saved, id));
+			for (const { id, answer } of session.questions) {
+				const entry = draft.answers?.[id];
+				if (!entry || typeof entry.value !== 'string' || entry.value === answer) continue;
+				if (answer !== entry.base) {
+					draftConflict = true;
+					continue;
+				}
+				values[id] = entry.value;
+				dirtyAnswerIds.add(id);
+			}
+			pendingAnswerCount = dirtyAnswerIds.size;
+		} catch {
+			draftAvailable = false;
+		}
+	}
+
 	let saveError = $state('');
 	let pendingAnswerCount = $state(0);
 	let retryingSave = $state(false);
@@ -89,9 +154,12 @@
 	let confirm = $state(false);
 	let submitting = $state(false);
 	let statusSyncing = $state(false);
+	let statusUnavailable = $state(false);
+	let nextTimeoutCheck = 0;
 	let serverTimeOffset = $state(0);
 	let q = $derived(attempt?.questions[index]);
 	let reviewIds = $state<string[]>([]);
+	let questionListHeading: HTMLHeadingElement | undefined = $state();
 	let questionFilter = $state<'all' | 'unanswered' | 'review'>('all');
 	let numberedQuestions = $derived(attempt?.questions.map((item, i) => ({ item, i })) ?? []);
 	let unansweredQuestions = $derived(
@@ -121,6 +189,7 @@
 		if (!attempt || answerLocked || nextIndex < 0 || nextIndex >= attempt.questions.length) return;
 		confirm = false;
 		index = nextIndex;
+		writeDraft();
 		await tick();
 		const heading = document.getElementById('exam-question-heading');
 		heading?.focus({ preventScroll: true });
@@ -131,6 +200,7 @@
 		reviewIds = reviewIds.includes(q.id)
 			? reviewIds.filter((id) => id !== q.id)
 			: [...reviewIds, q.id];
+		writeDraft();
 	}
 	let answeredCount = $derived(
 		attempt?.questions.filter((item) => values[item.id]?.trim()).length ?? 0
@@ -138,14 +208,28 @@
 	let hasAnswerForEveryQuestion = $derived(
 		Boolean(attempt?.questions.length) && answeredCount === attempt?.questions.length
 	);
-	let answerLocked = $derived(Boolean(attempt?.pausedAt) || submitting || timeChanging);
+	let answerLocked = $derived(
+		Boolean(attempt && (attempt.pausedAt || !remaining)) || submitting || timeChanging
+	);
 	let questionCount = $derived(data.examSummary.reduce((sum, item) => sum + item.count, 0));
 	let totalPoints = $derived(data.examSummary.reduce((sum, item) => sum + item.points, 0));
 	onMount(() => {
+		try {
+			const saved = sessionStorage.getItem(resumeKey);
+			if (saved && /^[A-Z0-9]{6}$/.test(saved)) {
+				resumeCode = saved;
+				code = saved;
+			}
+		} catch {
+			draftAvailable = false;
+		}
 		const timer = setInterval(() => {
 			if (attempt && !attempt.submittedAt) {
 				updateRemaining();
-				if (!attempt.pausedAt && !remaining && !timeChanging) submit(true);
+				if (!attempt.pausedAt && !remaining && !timeChanging && Date.now() >= nextTimeoutCheck) {
+					nextTimeoutCheck = Date.now() + 5000;
+					void submit(true);
+				}
 			}
 		}, 1000);
 		const statusTimer = setInterval(() => void syncStatus(), 3000);
@@ -201,7 +285,10 @@
 			event.preventDefault();
 			event.returnValue = '';
 		};
-		const onOnline = () => void retryAnswers();
+		const onOnline = () => {
+			void syncStatus();
+			void retryAnswers();
+		};
 		addEventListener('pageshow', onShow);
 		addEventListener('popstate', onPop);
 		addEventListener('keydown', onKeydown);
@@ -240,16 +327,21 @@
 	}
 
 	async function start() {
+		if (starting || attempt) return;
 		message = '';
 		starting = true;
 		try {
 			const started = await startExam({ code: code.trim().toUpperCase() });
 			attempt = started;
-			values = Object.fromEntries(
-				started.questions.map((question) => [question.id, question.answer])
-			);
+			try {
+				sessionStorage.setItem(resumeKey, code);
+			} catch {
+				draftAvailable = false;
+			}
+			hydrateAnswers(started);
 			serverTimeOffset = new Date(started.serverNow).getTime() - Date.now();
 			updateRemaining();
+			if (dirtyAnswerIds.size && !started.pausedAt) void retryAnswers();
 		} catch (error) {
 			message = examErrorMessage(error, '올바른 6자리 코드를 입력해 주세요.');
 		} finally {
@@ -265,6 +357,7 @@
 	function save(id: string) {
 		if (answerLocked || attempt?.submittedAt) return;
 		dirtyAnswerIds.add(id);
+		writeDraft();
 		pendingAnswerCount = dirtyAnswerIds.size;
 		clearTimeout(timers[id]);
 		timers[id] = setTimeout(() => {
@@ -281,7 +374,9 @@
 			.then(() => saveAnswer({ attemptQuestionId: id, value }))
 			.then(() => {
 				failedAnswerIds.delete(id);
+				serverAnswers[id] = value;
 				if ((values[id] ?? '') === value) dirtyAnswerIds.delete(id);
+				writeDraft();
 				pendingAnswerCount = dirtyAnswerIds.size;
 				saveError = failedAnswerIds.size
 					? '일부 답안을 저장하지 못했습니다. 네트워크를 확인해 주세요.'
@@ -365,11 +460,7 @@
 			if (timeout) clearPendingSaveTimers();
 			else await flushPendingAnswers();
 			const submitted = await submitExam({ attemptId: attempt.id, timeout });
-			attempt = {
-				...attempt,
-				...submitted
-			};
-			confirm = false;
+			finishSubmission(submitted);
 		} catch (error) {
 			if (timeout) {
 				await syncStatus();
@@ -382,6 +473,17 @@
 		} finally {
 			submitting = false;
 		}
+	}
+
+	function finishSubmission(submitted: Awaited<ReturnType<typeof submitExam>>) {
+		if (!attempt) return;
+		clearPendingSaveTimers();
+		try {
+			sessionStorage.removeItem('owkr-exam-draft:' + attempt.id);
+			sessionStorage.removeItem(resumeKey);
+		} catch {}
+		attempt = { ...attempt, ...submitted };
+		confirm = false;
 	}
 
 	function updateRemaining() {
@@ -400,6 +502,7 @@
 			const wasPaused = Boolean(attempt.pausedAt);
 			const status = await getExamStatus({ attemptId: attempt.id });
 			if (revision !== statusRevision || timeChanging) return;
+			statusUnavailable = false;
 			if (status.addedMinutes > attempt.addedMinutes)
 				announceAddedTime(status.addedMinutes - attempt.addedMinutes);
 			serverTimeOffset = new Date(status.serverNow).getTime() - Date.now();
@@ -419,16 +522,22 @@
 				}
 			}
 			if (!status.pausedAt && !status.submittedAt) await restoreQuestions();
-			if (wasPaused && !status.pausedAt && dirtyAnswerIds.size) {
-				void flushPendingAnswers().catch(() => undefined);
+			if (
+				!status.submittedAt &&
+				!status.pausedAt &&
+				dirtyAnswerIds.size &&
+				(wasPaused || saveError) &&
+				!submitting &&
+				!retryingSave
+			) {
+				void retryAnswers();
 			}
 			if (status.submittedAt) {
 				const submitted = await submitExam({ attemptId: attempt.id, timeout: status.timedOut });
-				attempt = { ...attempt, ...submitted };
-				confirm = false;
+				finishSubmission(submitted);
 			}
 		} catch {
-			// 일시적인 상태 확인 실패는 다음 주기에서 다시 시도합니다.
+			statusUnavailable = true;
 		} finally {
 			statusSyncing = false;
 		}
@@ -512,9 +621,10 @@
 			<p class="eyebrow">EXAM GUIDE</p>
 			<h1 class="mt-3 text-[28px] font-bold tracking-[-.04em]">시험 안내</h1>
 			<p class="mt-3 text-sm leading-6 text-[#6a7684]">
-				안내를 확인한 뒤 시험을 시작해 주세요. <b class="font-semibold text-[#34404d]"
-					>시험 시작을 누르는 순간부터 60분이 적용됩니다.</b
-				>
+				{resumeCode === code
+					? '저장된 응시가 있으면 이어서 시작합니다.'
+					: '안내를 확인한 뒤 시험을 시작해 주세요.'}
+				<b class="font-semibold text-[#34404d]">시험 시작을 누르는 순간부터 60분이 적용됩니다.</b>
 			</p>
 
 			<div class="mt-8 space-y-4 border-y border-[#c8d0d9] py-6 text-sm leading-7 text-[#34404d]">
@@ -542,7 +652,7 @@
 			</div>
 
 			{#if message}<p role="alert" class="notice-error mt-5">{message}</p>{/if}
-			<div class="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+			<div class="button-pair mt-7 sm:ml-auto sm:w-64">
 				<button
 					type="button"
 					class="btn-secondary"
@@ -555,7 +665,7 @@
 					disabled={starting || questionCount === 0}
 					onclick={start}
 				>
-					{starting ? '시험 준비 중…' : '시험 시작'}
+					{starting ? '시험 준비 중…' : resumeCode === code ? '이어서 풀기' : '시험 시작'}
 				</button>
 			</div>
 			{#if questionCount === 0}<p role="alert" class="notice-error mt-3">
@@ -570,7 +680,7 @@
 	<main class="min-h-screen bg-[#f7f8fa]">
 		<header class="site-header">
 			<div class="mx-auto flex h-16 max-w-xl items-center px-5">
-				<a href="/" class="wordmark">OWKR EXAM</a>
+				<a href="/exam" data-sveltekit-reload class="wordmark">OWKR EXAM</a>
 			</div>
 		</header>
 		<section class="mx-auto flex min-h-[calc(100vh-64px)] max-w-xl items-center px-5 py-12">
@@ -588,7 +698,16 @@
 					객관식 점수만 즉시 공개됩니다. 단답·서술·논술형 점수와 총점은 운영진만 확인하며, 제출
 					이후에는 답안을 변경할 수 없습니다.
 				</p>
+				{#if attempt.answeredCount !== undefined}
+					<p class="mt-4 text-sm leading-6 text-[#52616e]">
+						{attempt.timedOut ? '시간 종료로 제출되었습니다.' : '제출이 확정되었습니다.'}
+						서버에 접수된 답안 {attempt.answeredCount} / {attempt.questionCount}개
+					</p>
+				{/if}
 				<p class="mt-8 text-sm font-semibold text-[#34404d]">이 페이지를 종료해도 됩니다.</p>
+				<a href="/exam" data-sveltekit-reload class="btn-secondary mt-4"
+					>응시 코드 화면으로 돌아가기</a
+				>
 			</div>
 		</section>
 	</main>
@@ -621,7 +740,7 @@
 				<div class="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
 					<span class="wordmark">OWKR EXAM</span><button
 						type="button"
-						class="btn-secondary text-xs"
+						class="btn-secondary btn-compact"
 						disabled={answerLocked}
 						onclick={() => changeTime('pause')}
 						>{timeChanging ? '답안을 저장하고 정지하는 중…' : '잠시 정지'}</button
@@ -636,7 +755,9 @@
 					</p>
 					<p role="status" class="text-xs text-[#6a7684]">
 						{saveError
-							? '저장하지 못했습니다'
+							? draftAvailable
+								? '이 탭에 임시 저장됨'
+								: '저장하지 못했습니다'
 							: pendingAnswerCount
 								? '답안을 저장하는 중…'
 								: answeredCount
@@ -655,6 +776,14 @@
 					</p>
 				</div>
 				<div class="max-w-sm text-right">
+					<button
+						type="button"
+						class="btn-secondary btn-compact md:hidden"
+						onclick={() => {
+							questionListHeading?.focus({ preventScroll: true });
+							questionListHeading?.scrollIntoView({ block: 'start' });
+						}}>문항 목록</button
+					>
 					{#if saveError}
 						<p role="alert" class="notice-error mt-2 text-left text-xs">{saveError}</p>
 						<button
@@ -667,6 +796,15 @@
 				</div>
 			</div>
 
+			{#if statusUnavailable || draftConflict || (pendingAnswerCount && !draftAvailable)}
+				<p role="status" class="notice-error mb-4">
+					{statusUnavailable
+						? '서버 연결을 다시 확인 중입니다. 이 페이지를 열어 두세요.'
+						: draftConflict
+							? '서버에서 바뀐 답안은 최신 값으로 표시했습니다. 해당 문항의 답안을 확인해 주세요.'
+							: '브라우저에 임시 저장할 수 없습니다. 서버 저장 완료까지 이 페이지를 열어 두세요.'}
+				</p>
+			{/if}
 			{#if timeControlError}<p role="alert" class="notice-error mb-4">{timeControlError}</p>{/if}
 
 			<div class="grid gap-5 md:grid-cols-[184px_minmax(0,1fr)]">
@@ -674,7 +812,13 @@
 					class="order-2 h-fit border border-[#d5dce2] bg-white p-3 md:sticky md:top-24 md:order-1 md:max-h-[calc(100dvh-7rem)] md:overflow-y-auto"
 				>
 					<div class="mb-4 flex items-baseline justify-between">
-						<p class="text-sm font-bold text-[#24333f]">문제 번호</p>
+						<h2
+							bind:this={questionListHeading}
+							tabindex="-1"
+							class="scroll-mt-32 text-sm font-bold text-[#24333f]"
+						>
+							문제 번호
+						</h2>
 						<span class="font-mono text-xs font-bold text-[#087ba8]"
 							>{answeredCount}/{attempt.questions.length}</span
 						>
@@ -683,7 +827,7 @@
 						{#each [{ value: 'all', label: '전체', count: numberedQuestions.length }, { value: 'unanswered', label: '안 푼 문제', count: unansweredQuestions.length }, { value: 'review', label: '다시 볼 문제', count: reviewQuestions.length }] as filter}
 							<button
 								type="button"
-								class="btn-secondary w-full justify-between px-2 py-1 text-xs aria-pressed:border-[#087ba8] aria-pressed:bg-[#d8edf5] aria-pressed:text-[#075c7d]"
+								class="btn-secondary btn-compact w-full justify-between aria-pressed:border-[#087ba8] aria-pressed:bg-[#d8edf5] aria-pressed:text-[#075c7d]"
 								aria-pressed={questionFilter === filter.value}
 								onclick={() => (questionFilter = filter.value as typeof questionFilter)}
 								>{filter.label} {filter.count}</button
@@ -733,7 +877,7 @@
 						type="button"
 						class="btn mt-5 w-full"
 						aria-describedby={hasAnswerForEveryQuestion ? 'answer-entry-status' : undefined}
-						disabled={submitting || Boolean(attempt.pausedAt)}
+						disabled={answerLocked}
 						onclick={() => (confirm = true)}>답안 제출</button
 					>
 				</aside>
@@ -808,9 +952,12 @@
 									rows={q.type === 'short' ? 3 : longEssay ? 10 : 6}
 									maxlength="10000"
 									aria-describedby="answer-limit"
-									bind:value={values[q.id]}
+									value={values[q.id] ?? ''}
 									disabled={answerLocked}
-									oninput={() => save(q.id)}
+									oninput={(event) => {
+										values[q.id] = event.currentTarget.value;
+										save(q.id);
+									}}
 									placeholder={q.type === 'short'
 										? '답변을 입력하세요.'
 										: '핵심 내용을 중심으로 답변을 작성하세요.'}></textarea>
@@ -818,7 +965,7 @@
 									최대 10,000자 · {(values[q.id] ?? '').length.toLocaleString('ko-KR')}자 작성
 								</p>{/if}
 							<div
-								class="mt-8 flex flex-wrap justify-between gap-2 border-t-2 border-[#34404d] pt-5"
+								class="button-pair mt-8 border-t-2 border-[#34404d] pt-5 sm:grid-cols-[8rem_8rem] sm:justify-between"
 							>
 								<button
 									type="button"
@@ -851,18 +998,27 @@
 				<AlertDialog.Title class="text-xl font-bold">답안을 제출할까요?</AlertDialog.Title>
 				<AlertDialog.Description class="mt-4 text-sm leading-6 text-[#6a7684]">
 					제출 후에는 답안을 수정하거나 다시 응시할 수 없습니다.<br />아직 답하지 않은 문제:
-					<b>{attempt.questions.filter((item) => !values[item.id]?.trim()).length}개</b>
+					<b>{unansweredQuestions.length}개</b>
 				</AlertDialog.Description>
 				{#if unansweredQuestions.length}
 					<div class="mt-4">
-						<p class="text-sm font-semibold">아직 답하지 않은 문제로 돌아가기</p>
-						<div class="mt-2 flex flex-wrap gap-2">
-							{#each unansweredQuestions as { i }}<button
-									type="button"
-									class="btn-secondary"
-									onclick={() => goToQuestion(i)}>{i + 1}번</button
-								>{/each}
-						</div>
+						<button
+							type="button"
+							class="btn-secondary btn-compact"
+							disabled={submitting}
+							onclick={() => goToQuestion(unansweredQuestions[0].i)}>첫 미응답 문항으로 이동</button
+						>
+						<details class="mt-3 text-sm">
+							<summary class="cursor-pointer py-2">미응답 문항 번호 보기</summary>
+							<div class="mt-2 flex flex-wrap gap-2">
+								{#each unansweredQuestions as { i }}<button
+										type="button"
+										class="btn-secondary btn-compact min-w-12"
+										disabled={submitting}
+										onclick={() => goToQuestion(i)}>{i + 1}번</button
+									>{/each}
+							</div>
+						</details>
 					</div>
 				{/if}
 				{#if reviewQuestions.length}
@@ -871,16 +1027,16 @@
 						<div class="mt-2 flex flex-wrap gap-2">
 							{#each reviewQuestions as { i }}<button
 									type="button"
-									class="btn-secondary"
+									class="btn-secondary btn-compact min-w-12"
 									onclick={() => goToQuestion(i)}>{i + 1}번</button
 								>{/each}
 						</div>
 					</div>
 				{/if}
-				<div class="mt-7 flex justify-end gap-2">
-					<AlertDialog.Cancel class="btn-secondary">계속 작성</AlertDialog.Cancel>
+				<div class="button-pair mt-7" aria-busy={submitting}>
+					<AlertDialog.Cancel disabled={submitting}>계속 작성</AlertDialog.Cancel>
 					<button type="button" class="btn" disabled={submitting} onclick={() => submit()}>
-						{submitting ? '답안을 저장하는 중…' : '제출하기'}
+						{submitting ? '제출 확인 중…' : unansweredQuestions.length ? '그래도 제출' : '제출하기'}
 					</button>
 				</div>
 			</div>

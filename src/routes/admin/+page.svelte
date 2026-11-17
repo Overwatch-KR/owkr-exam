@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
+	import type { SubmitFunction } from '@sveltejs/kit';
 	import { beforeNavigate, pushState } from '$app/navigation';
-	import { onMount, untrack } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { codeStatusLabel, questionTypeLabel } from '$lib/admin/presentation';
 	import AdminSelect from '$lib/components/admin-select.svelte';
@@ -22,6 +24,13 @@
 	type QuestionConflict = {
 		latest: ConflictQuestion;
 		draft: Omit<ConflictQuestion, 'id' | 'updatedAt' | 'revision'>;
+	};
+	type GradeConflict = {
+		questionId: string;
+		sortOrder: number;
+		score: number;
+		base: number | null;
+		current: number | null;
 	};
 	type AdminForm = {
 		message?: string;
@@ -58,6 +67,44 @@
 		(data.attempts ?? []).filter((attempt) => attempt.isTest === (resultKind === 'test'))
 	);
 	let gradingValues = $state<Record<string, string>>({});
+	let gradeConflicts = $state<GradeConflict[]>([]);
+	let gradeBases = $state<Record<string, number | null>>({});
+	let gradeError = $state('');
+	function resolveGrade(conflict: GradeConflict, keepDraft: boolean) {
+		gradeBases[conflict.questionId] = conflict.current;
+		if (!keepDraft) gradingValues[conflict.questionId] = String(conflict.current ?? '');
+		gradeConflicts = gradeConflicts.filter(({ questionId }) => questionId !== conflict.questionId);
+		if (!gradeConflicts.length) gradeError = '';
+	}
+	const enhanceGrades: SubmitFunction = ({ cancel }) => {
+		if (savingGrades || gradeConflicts.length) return cancel();
+		savingGrades = true;
+		gradeError = '';
+		return async ({ result, update }) => {
+			try {
+				if (result.type === 'success') {
+					await update({ reset: false });
+					await tick();
+					data = initialData;
+					gradingValues = {};
+					gradeBases = {};
+					gradingDirty = false;
+				} else if (result.type === 'failure') {
+					const failure = result.data as
+						{ message?: string; gradeConflicts?: GradeConflict[] } | undefined;
+					gradeError = failure?.message ?? '채점 점수를 저장하지 못했습니다.';
+					gradeConflicts = failure?.gradeConflicts ?? [];
+				} else {
+					gradeError = '저장 결과를 확인할 수 없습니다. 연결을 확인한 뒤 다시 저장해 주세요.';
+				}
+			} catch {
+				gradeError = '저장 결과를 확인할 수 없습니다. 연결을 확인한 뒤 다시 저장해 주세요.';
+			} finally {
+				savingGrades = false;
+			}
+		};
+	};
+
 	let filteredQuestions = $derived(
 		(data.questions ?? []).filter(
 			(q) =>
@@ -131,6 +178,7 @@
 		return `${hours ? `${hours}:` : ''}${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 	};
 	function setScoreInput(questionId: string, score: number) {
+		if (savingGrades) return;
 		const input = document.getElementById(`score-${questionId}`) as HTMLInputElement | null;
 		if (!input) return;
 		input.value = String(score);
@@ -695,8 +743,8 @@
 										<form id="delete-question-form" method="POST" action="?/deleteQuestion">
 											<input type="hidden" name="id" value={data.selectedQuestion.id} />
 										</form>
-										<div class="mt-7 flex justify-end gap-2">
-											<AlertDialog.Cancel class="btn-secondary">취소</AlertDialog.Cancel>
+										<div class="button-pair mt-7 sm:ml-auto sm:w-56">
+											<AlertDialog.Cancel>취소</AlertDialog.Cancel>
 											<button
 												type="submit"
 												form="delete-question-form"
@@ -748,7 +796,7 @@
 												</section>
 											</div>
 											<div
-												class="flex flex-col-reverse gap-2 border-t border-[#e2e7ec] px-6 py-4 sm:flex-row sm:justify-end"
+												class="button-pair border-t border-[#e2e7ec] px-6 py-4 sm:grid-cols-[10rem_10rem] sm:justify-end"
 											>
 												<AlertDialog.Action
 													class="btn-secondary"
@@ -757,7 +805,6 @@
 													최신 저장본 적용
 												</AlertDialog.Action>
 												<AlertDialog.Action
-													class="btn"
 													onclick={() => continueEditingConflict(activeQuestionConflict)}
 												>
 													내 변경 계속 수정
@@ -1046,9 +1093,30 @@
 									action="?/gradeAll"
 									class="mt-6"
 									oninput={() => (gradingDirty = true)}
-									onsubmit={() => (savingGrades = true)}
+									use:enhance={enhanceGrades}
 								>
 									<input type="hidden" name="attemptId" value={data.grading.attempt.id} />
+									{#if gradeError}<p role="alert" class="notice-error mb-4">{gradeError}</p>{/if}
+									{#each gradeConflicts as conflict (conflict.questionId)}
+										<div class="border-line mb-4 rounded-md border p-4">
+											<p class="mb-3 text-sm">
+												{conflict.sortOrder}번 · 이전 {conflict.base ?? '미채점'} · 현재 {conflict.current ??
+													'미채점'} · 내 입력 {conflict.score}
+											</p>
+											<div class="flex flex-wrap gap-2">
+												<button
+													type="button"
+													class="btn-secondary btn-compact"
+													onclick={() => resolveGrade(conflict, false)}>현재 점수 적용</button
+												>
+												<button
+													type="button"
+													class="btn-secondary btn-compact"
+													onclick={() => resolveGrade(conflict, true)}>내 점수 유지</button
+												>
+											</div>
+										</div>
+									{/each}
 									<div class="border-line mb-5 border-b pb-4">
 										<p role="status" class="text-sm font-semibold">
 											점수를 아직 입력하지 않은 문제 {ungradedQuestions.length}개
@@ -1118,12 +1186,20 @@
 													<div class="flex items-center gap-2">
 														<label class="text-xs font-semibold" for={`score-${q.id}`}>점수</label>
 														<input
+															type="hidden"
+															name={`base-${q.id}`}
+															value={Object.hasOwn(gradeBases, q.id)
+																? (gradeBases[q.id] ?? '')
+																: (q.score ?? '')}
+														/>
+														<input
 															id={`score-${q.id}`}
 															name={`score-${q.id}`}
 															type="number"
 															step="0.01"
 															min="0"
 															max={q.points}
+															disabled={savingGrades}
 															value={gradingValues[q.id] ?? q.score ?? ''}
 															oninput={(event) => (gradingValues[q.id] = event.currentTarget.value)}
 															class="w-24 scroll-mt-8 scroll-mb-40"

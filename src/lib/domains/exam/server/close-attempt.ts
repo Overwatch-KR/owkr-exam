@@ -27,14 +27,15 @@ function isCorrectMultipleAnswer(value: string, question: typeof examQuestions.$
 	);
 }
 
-export async function closeAttempt(id: string, timedOut = false) {
+export async function closeAttempt(id: string, requireExpired = false) {
 	const db = database();
 	return db.transaction(async (tx) => {
 		const [attempt] = await tx.select().from(attempts).where(eq(attempts.id, id)).for('update');
 		if (!attempt || attempt.submittedAt) return attempt;
 
 		const now = new Date();
-		if (timedOut && (attempt.pausedAt || attempt.expiresAt > now)) return attempt;
+		const timedOut = attempt.expiresAt <= now;
+		if (attempt.pausedAt || (requireExpired && !timedOut)) return attempt;
 		const questions = await tx.select().from(examQuestions).where(eq(examQuestions.attemptId, id));
 		const submittedAnswers = questions.length
 			? await tx

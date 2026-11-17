@@ -52,15 +52,15 @@
 		<p class="mt-1 text-sm leading-5 text-[#667788]">
 			현재 작업을 마친 뒤 새로고침하면 최신 버전을 사용할 수 있습니다.
 		</p>
-		<div class="mt-4 flex justify-end gap-2">
+		<div class="button-pair mt-4 sm:ml-auto sm:w-44">
 			<button
-				class="btn-secondary h-9 px-3 text-sm"
+				class="btn-secondary btn-compact"
 				type="button"
 				onclick={() => (updateDismissed = true)}
 			>
 				나중에
 			</button>
-			<button class="btn h-9 px-3 text-sm" type="button" onclick={() => window.location.reload()}>
+			<button class="btn btn-compact" type="button" onclick={() => window.location.reload()}>
 				새로고침
 			</button>
 		</div>

@@ -18,7 +18,12 @@ const gradeAll: AdminAction = async (event) => {
 		return fail(400, { message: '채점할 수 있는 응시 기록을 찾지 못했습니다.' });
 	}
 
-	const scores: Array<{ questionId: string; score: number }> = [];
+	const scores: Array<{
+		questionId: string;
+		sortOrder: number;
+		score: number;
+		base: number | null;
+	}> = [];
 	for (const question of subjectiveQuestions) {
 		const raw = String(data.get(`score-${question.id}`) ?? '').trim();
 		if (!raw) continue;
@@ -28,27 +33,25 @@ const gradeAll: AdminAction = async (event) => {
 				message: `문제 ${question.sortOrder}의 점수는 0점부터 ${question.points}점까지 입력해 주세요.`
 			});
 		}
-		scores.push({ questionId: question.id, score });
+		const baseline = data.get(`base-${question.id}`);
+		if (typeof baseline !== 'string')
+			return fail(409, { message: '채점 화면을 새로고침한 뒤 다시 저장해 주세요.' });
+		const base = baseline === '' ? null : Number(baseline);
+		if (base !== null && (!Number.isFinite(base) || base < 0 || base > question.points))
+			return fail(400, { message: '기존 점수가 올바르지 않습니다. 채점 화면을 다시 열어 주세요.' });
+		if (score === base) continue;
+		scores.push({ questionId: question.id, sortOrder: question.sortOrder, score, base });
 	}
 	if (!scores.length) return fail(400, { message: '저장할 점수를 하나 이상 입력해 주세요.' });
 
 	try {
-		await db.transaction(async (tx) => {
+		const conflicts = await db.transaction(async (tx) => {
 			const [lockedAttempt] = await tx
 				.select()
 				.from(attempts)
 				.where(eq(attempts.id, attemptId))
 				.for('update');
 			if (!lockedAttempt?.submittedAt) throw new Error('채점할 응시 기록이 종료되지 않았습니다.');
-			for (const item of scores) {
-				await tx
-					.insert(answers)
-					.values({ attemptQuestionId: item.questionId, value: '', score: item.score })
-					.onConflictDoUpdate({
-						target: answers.attemptQuestionId,
-						set: { score: item.score, updatedAt: new Date() }
-					});
-			}
 			const scoredAnswers = await tx
 				.select()
 				.from(answers)
@@ -61,6 +64,21 @@ const gradeAll: AdminAction = async (event) => {
 			const scoreByQuestionId = new Map(
 				scoredAnswers.map((answer) => [answer.attemptQuestionId, answer.score])
 			);
+			const conflicts = scores.flatMap((item) => {
+				const current = scoreByQuestionId.get(item.questionId) ?? null;
+				return current !== item.base && current !== item.score ? [{ ...item, current }] : [];
+			});
+			if (conflicts.length) return conflicts;
+			for (const item of scores) {
+				scoreByQuestionId.set(item.questionId, item.score);
+				await tx
+					.insert(answers)
+					.values({ attemptQuestionId: item.questionId, value: '', score: item.score })
+					.onConflictDoUpdate({
+						target: answers.attemptQuestionId,
+						set: { score: item.score, updatedAt: new Date() }
+					});
+			}
 			const gradingComplete = subjectiveQuestions.every(
 				(question) =>
 					scoreByQuestionId.get(question.id) !== null && scoreByQuestionId.has(question.id)
@@ -79,7 +97,13 @@ const gradeAll: AdminAction = async (event) => {
 						subjectiveScore === null ? null : lockedAttempt.objectiveScore + subjectiveScore
 				})
 				.where(eq(attempts.id, attemptId));
+			return [];
 		});
+		if (conflicts.length)
+			return fail(409, {
+				message: '다른 운영자가 수정한 점수를 비교해 주세요.',
+				gradeConflicts: conflicts
+			});
 	} catch (cause) {
 		console.error('[admin:gradeAll] failed', {
 			attemptId,

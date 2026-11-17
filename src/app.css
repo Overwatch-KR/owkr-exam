@@ -103,23 +103,42 @@
 		background-color: var(--app-surface);
 	}
 
+	.btn,
+	.btn-secondary {
+		@apply inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-md border px-4 py-2 text-center text-sm leading-5 font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+	}
+
+	.btn:focus-visible,
+	.btn-secondary:focus-visible {
+		outline: 2px solid var(--app-accent);
+		outline-offset: 2px;
+	}
+
 	.btn {
-		@apply inline-flex items-center justify-center rounded-md px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50;
+		@apply border-transparent text-white;
 		background-color: var(--app-accent-fill);
 	}
 
-	.btn:hover {
+	.btn:where(:hover:not(:disabled)) {
 		background-color: var(--app-accent-fill-hover);
 	}
 
 	.btn-secondary {
-		@apply text-ink inline-flex items-center justify-center rounded-md border px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
+		@apply text-ink;
 		border-color: var(--app-line-strong);
 		background-color: var(--app-surface);
 	}
 
-	.btn-secondary:hover {
+	.btn-secondary:where(:hover:not(:disabled)) {
 		background-color: var(--app-surface-muted);
+	}
+
+	.btn-compact {
+		@apply min-h-9 px-3 py-1.5 text-xs;
+	}
+
+	.button-pair {
+		@apply grid grid-cols-2 items-stretch gap-2;
 	}
 
 	.label {

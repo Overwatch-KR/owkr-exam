@@ -7,7 +7,7 @@ fs.mkdirSync(cache, { recursive: true });
 const out = cache + '/time-bundle.mjs';
 await build({
 	stdin: {
-		contents: `export { controlExamTime } from '${repo}/src/lib/domains/exam/server/use-cases/control-exam-time.ts'; export { attemptActions } from '${repo}/src/lib/domains/admin/server/actions/attempt-actions.ts'; export { startExam } from '${repo}/src/lib/domains/exam/server/use-cases/start-exam.ts'; export { controlExamTimeInputSchema } from '${repo}/src/lib/domains/exam/shared/contracts/control-exam-time.ts';`,
+		contents: `export { closeAttempt } from '${repo}/src/lib/domains/exam/server/close-attempt.ts'; export { submitExam } from '${repo}/src/lib/domains/exam/server/use-cases/submit-exam.ts'; export { gradingActions } from '${repo}/src/lib/domains/admin/server/actions/grading-actions.ts'; export { controlExamTime } from '${repo}/src/lib/domains/exam/server/use-cases/control-exam-time.ts'; export { attemptActions } from '${repo}/src/lib/domains/admin/server/actions/attempt-actions.ts'; export { startExam } from '${repo}/src/lib/domains/exam/server/use-cases/start-exam.ts'; export { controlExamTimeInputSchema } from '${repo}/src/lib/domains/exam/shared/contracts/control-exam-time.ts';`,
 		resolveDir: repo,
 		loader: 'ts'
 	},
@@ -27,22 +27,31 @@ await build({
 						? { path: args.path, namespace: 'fixture' }
 						: { path: repo + '/src/lib/' + args.path.slice(5) + '.ts' }
 				);
-				b.onResolve({ filter: /close-attempt$/ }, () => ({ path: 'close', namespace: 'fixture' }));
 				b.onLoad({ filter: /.*/, namespace: 'fixture' }, (args) => ({
 					contents: args.path.endsWith('/db')
 						? 'export const database=()=>globalThis.timeTestDb;'
 						: args.path.endsWith('/guard')
 							? 'export function admin(event){if(!event.locals?.isAdmin)throw new Error("forbidden");}'
-							: 'export async function closeAttempt(id){globalThis.timeTestRow.submittedAt=new Date();globalThis.timeTestRow.timedOut=true;}',
-					loader: 'js'
+							: 'export { closeAttempt } from ' +
+								JSON.stringify(repo + '/src/lib/domains/exam/server/close-attempt.ts') +
+								';',
+					loader: 'js',
+					resolveDir: repo
 				}));
 			}
 		}
 	]
 });
-const { controlExamTime, attemptActions, startExam, controlExamTimeInputSchema } = await import(
-	out
-);
+const {
+	controlExamTime,
+	attemptActions,
+	startExam,
+	closeAttempt,
+	submitExam,
+	gradingActions,
+	controlExamTimeInputSchema
+} = await import(out);
+const { getTableName } = await import('drizzle-orm');
 const { PgDialect } = await import('drizzle-orm/pg-core');
 const dialect = new PgDialect();
 const realDate = Date;
@@ -57,11 +66,16 @@ globalThis.Date = class extends realDate {
 };
 let row,
 	locked = false,
+	beforeLock,
+	fixtureQuestions = [],
+	fixtureAnswers = [],
 	writes = 0,
 	checks = 0;
 const reset = (overrides = {}) => {
 	row = {
 		id: 'attempt',
+		codeId: 'code',
+		objectiveScore: 0,
 		discordId: 'owner',
 		expiresAt: new Date(now + 600000),
 		pausedAt: null,
@@ -69,7 +83,9 @@ const reset = (overrides = {}) => {
 		addedMinutes: 0,
 		...overrides
 	};
-	globalThis.timeTestRow = row;
+	beforeLock = undefined;
+	fixtureQuestions = [];
+	fixtureAnswers = [];
 	writes = 0;
 	locked = false;
 };
@@ -80,34 +96,71 @@ const matching = (condition) => {
 const db = {
 	select() {
 		return {
-			from() {
-				return {
+			from(table) {
+				const name = getTableName(table);
+				const query = {
 					where(condition) {
+						if (name === 'exam_questions') return Promise.resolve(fixtureQuestions);
+						if (name === 'answers') return Promise.resolve(fixtureAnswers);
 						const result = Promise.resolve(matching(condition));
 						result.for = async () => {
 							locked = true;
+							beforeLock?.();
+							beforeLock = undefined;
 							return matching(condition);
 						};
+						return result;
+					},
+					leftJoin() {
+						return {
+							where: async () =>
+								fixtureQuestions.map((q) => ({
+									...q,
+									value: fixtureAnswers.find((a) => a.attemptQuestionId === q.id)?.value ?? null
+								}))
+						};
+					}
+				};
+				return query;
+			}
+		};
+	},
+	update(table) {
+		return {
+			set(data) {
+				return {
+					where() {
+						assert.ok(locked, 'writes require row lock');
+						if (getTableName(table) === 'exam_attempts') {
+							Object.assign(row, data);
+							writes++;
+						}
+						const result = Promise.resolve();
+						result.returning = async () => [row];
 						return result;
 					}
 				};
 			}
 		};
 	},
-	update() {
+	insert() {
 		return {
-			set(data) {
+			values(data) {
 				return {
-					where: async () => {
+					async onConflictDoUpdate({ set }) {
 						assert.ok(locked, 'writes require row lock');
-						Object.assign(row, data);
-						writes++;
+						const answer = fixtureAnswers.find(
+							(item) => item.attemptQuestionId === data.attemptQuestionId
+						);
+						if (answer) Object.assign(answer, set);
+						else fixtureAnswers.push(data);
 					}
 				};
 			}
 		};
 	},
 	async transaction(fn) {
+		locked = false;
 		return fn(db);
 	}
 };
@@ -154,7 +207,7 @@ try {
 	reset({ expiresAt: new Date(now - 1) });
 	await assert.rejects(control('pause'), (e) => e.status === 409);
 	assert.equal(row.timedOut, true);
-	assert.equal(writes, 0);
+	assert.equal(writes, 1);
 	checks++;
 	reset({ expiresAt: new Date(now - 10000), pausedAt: new Date(now - 60000) });
 	await control('resume');
@@ -199,7 +252,7 @@ try {
 		(await attemptActions.extendAttempt(form({ id: 'attempt', minutes: '5' }))).status,
 		409
 	);
-	assert.equal(writes, 0);
+	assert.equal(writes, 1);
 	checks++;
 	assert.equal(
 		controlExamTimeInputSchema.safeParse({
@@ -258,6 +311,69 @@ try {
 	assert.ok(!JSON.stringify(pausedStart).includes('HIDDEN'));
 	checks++;
 	globalThis.timeTestDb = originalDb;
+
+	reset();
+	beforeLock = () => (row.pausedAt = new Date(now));
+	await assert.rejects(submitExam({ attemptId: 'attempt' }, user), (e) => e.status === 409);
+	assert.equal(row.submittedAt, null);
+	assert.equal(writes, 0);
+	checks++;
+
+	reset({ expiresAt: new Date(now - 1) });
+	beforeLock = () => (row.expiresAt = new Date(now + 60000));
+	await assert.rejects(
+		submitExam({ attemptId: 'attempt', timeout: true }, user),
+		(e) => e.status === 409
+	);
+	assert.equal(row.submittedAt, null);
+	assert.equal(writes, 0);
+	checks++;
+
+	reset();
+	beforeLock = () => (row.expiresAt = new Date(now));
+	fixtureQuestions = [
+		{ id: 'one', type: 'multiple', correctAnswer: 0, points: 2 },
+		{ id: 'two', type: 'short', points: 3 }
+	];
+	fixtureAnswers = [{ attemptQuestionId: 'one', value: '0' }];
+	const receipt = await submitExam({ attemptId: 'attempt' }, user);
+	assert.equal(receipt.timedOut, true);
+	assert.equal(receipt.objectiveScore, 2);
+	assert.equal(receipt.answeredCount, 1);
+	assert.equal(receipt.questionCount, 2);
+	assert.deepEqual(await submitExam({ attemptId: 'attempt' }, user), receipt);
+	assert.equal(writes, 1);
+	checks++;
+
+	reset({ pausedAt: new Date(now), expiresAt: new Date(now - 1) });
+	await closeAttempt('attempt', true);
+	assert.equal(writes, 0);
+	checks++;
+
+	reset({ submittedAt: new Date(now), objectiveScore: 2 });
+	fixtureQuestions = [
+		{ id: 'one', type: 'short', points: 5, sortOrder: 20 },
+		{ id: 'two', type: 'short', points: 5, sortOrder: 21 }
+	];
+	fixtureAnswers = [{ attemptQuestionId: 'one', value: 'answer', score: 4 }];
+	const fields = {
+		attemptId: 'attempt',
+		'score-one': '3',
+		'base-one': '2',
+		'score-two': '5',
+		'base-two': ''
+	};
+	const conflict = await gradingActions.gradeAll(form(fields));
+	assert.equal(conflict.status, 409);
+	assert.equal(conflict.data.gradeConflicts[0].current, 4);
+	assert.equal(fixtureAnswers.length, 1);
+	assert.equal(writes, 0);
+	const saved = await gradingActions.gradeAll(form({ ...fields, 'score-one': '2' }));
+	assert.ok(saved.success);
+	assert.equal(fixtureAnswers[0].score, 4);
+	assert.equal(fixtureAnswers[1].score, 5);
+	assert.equal(row.totalScore, 11);
+	checks++;
 
 	console.log(
 		'시험 시간 회귀 검사 ' +
