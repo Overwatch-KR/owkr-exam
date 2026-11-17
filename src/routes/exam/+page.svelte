@@ -108,6 +108,15 @@
 				: numberedQuestions
 	);
 	let longEssay = $derived(q?.type === 'essay' && index === (attempt?.questions.length ?? 0) - 1);
+	let questionType = $derived(
+		q?.type === 'multiple'
+			? '객관식'
+			: q?.type === 'short'
+				? '단답형'
+				: longEssay
+					? '논술형'
+					: '서술형'
+	);
 	async function goToQuestion(nextIndex: number) {
 		if (!attempt || answerLocked || nextIndex < 0 || nextIndex >= attempt.questions.length) return;
 		confirm = false;
@@ -146,26 +155,37 @@
 		const onPop = () => location.replace('/exam');
 		let nextShortcutPressed = false;
 		const onKeydown = (event: KeyboardEvent) => {
-			if (event.key === 'Escape' && confirm) confirm = false;
-			if (!attempt || attempt.submittedAt || answerLocked || confirm) return;
+			if (!attempt || attempt.submittedAt || answerLocked || confirm || event.isComposing) return;
 			const isEnter = event.key === 'Enter' || event.code === 'NumpadEnter';
 			if (isEnter && event.shiftKey) {
 				event.preventDefault();
-				if (event.isComposing || event.repeat || nextShortcutPressed) return;
+				if (event.repeat || nextShortcutPressed) return;
 				nextShortcutPressed = true;
 				goNext();
 				return;
 			}
 			const target = event.target as HTMLElement | null;
 			const isTyping = Boolean(
-				target?.closest('textarea, select, [contenteditable="true"], input:not([type="radio"])')
+				target?.closest(
+					'textarea, select, [contenteditable="true"], input:not([type="radio"]):not([type="checkbox"])'
+				)
 			);
 			const choiceIndex = /^Numpad[1-5]$/.test(event.code)
 				? Number(event.code.slice(-1)) - 1
 				: /^[1-5]$/.test(event.key)
 					? Number(event.key) - 1
 					: null;
-			if (!isTyping && !event.ctrlKey && !event.metaKey && !event.altKey && choiceIndex !== null) {
+			if (
+				q?.type === 'multiple' &&
+				!isTyping &&
+				!event.repeat &&
+				!event.shiftKey &&
+				!event.ctrlKey &&
+				!event.metaKey &&
+				!event.altKey &&
+				choiceIndex !== null &&
+				choiceIndex < q.options.length
+			) {
 				event.preventDefault();
 				selectChoice(choiceIndex);
 			}
@@ -596,18 +616,18 @@
 	<main class="min-h-screen bg-[#f3f5f7]">
 		<header class="site-header sticky top-0 z-30 bg-white shadow-sm">
 			<div
-				class="mx-auto flex min-h-20 max-w-[1200px] items-center justify-between gap-3 px-5 py-3 sm:px-8"
+				class="mx-auto flex min-h-20 max-w-[1200px] items-center justify-between gap-3 px-4 py-3 sm:px-8"
 			>
-				<div>
+				<div class="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
 					<span class="wordmark">OWKR EXAM</span><button
 						type="button"
-						class="btn-secondary ml-3 text-xs"
+						class="btn-secondary text-xs"
 						disabled={answerLocked}
 						onclick={() => changeTime('pause')}
 						>{timeChanging ? '답안을 저장하고 정지하는 중…' : '잠시 정지'}</button
 					>
 				</div>
-				<div class="text-right">
+				<div class="shrink-0 text-right">
 					<p class="text-[10px] font-semibold tracking-[0.12em] text-[#6a7684]">
 						{attempt.pausedAt ? '시험 일시 중지' : '남은 시간'}
 					</p>
@@ -619,7 +639,9 @@
 							? '저장하지 못했습니다'
 							: pendingAnswerCount
 								? '답안을 저장하는 중…'
-								: '답안이 저장되었습니다'}
+								: answeredCount
+									? '답안이 저장되었습니다'
+									: ''}
 					</p>
 				</div>
 			</div>
@@ -676,7 +698,7 @@
 								aria-current={i === index ? 'step' : undefined}
 								disabled={answerLocked}
 								onclick={() => goToQuestion(i)}
-								class="relative h-8 min-w-0 border text-xs font-semibold transition-colors {i ===
+								class="relative h-9 min-w-0 border text-xs font-semibold transition-colors {i ===
 								index
 									? 'border-[#087ba8] bg-[#087ba8] text-white'
 									: values[item.id]?.trim()
@@ -699,7 +721,7 @@
 					<p class="mt-4 border-t border-[#bfd4df] pt-3 text-[11px] leading-5 text-[#52616e]">
 						연한 파랑: 답한 문제<br />진한 파랑: 지금 보는 문제<br />주황색 점: 다시 볼 문제
 					</p>
-					<p class="mt-3 text-[11px] leading-5 text-[#52616e]">
+					<p class="mt-3 hidden text-xs leading-5 text-[#52616e] md:block">
 						Shift + Enter: 다음 문제<br />1–5: 객관식 선택{q?.allowsMultipleAnswers ? '/해제' : ''}
 					</p>
 					{#if hasAnswerForEveryQuestion}
@@ -721,14 +743,16 @@
 							class="order-1 min-w-0 border border-[#d5dce2] bg-white p-4 shadow-[0_1px_1px_rgba(17,24,32,0.02)] sm:p-6 md:order-2"
 						>
 							<div class="border-b-2 border-[#34404d] pb-6">
-								<div class="flex items-baseline justify-between">
+								<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
 									<p class="font-mono text-sm font-bold text-[#087ba8]">문제 {index + 1}</p>
-									<span class="text-sm font-semibold text-[#52616e]">{q.points}점 문제</span>
+									<span class="text-sm font-semibold text-[#52616e]"
+										>{questionType} · {q.points}점</span
+									>
 								</div>
 								<h1
 									id="exam-question-heading"
 									tabindex="-1"
-									class="mt-4 scroll-mt-28 text-base leading-7 font-medium whitespace-pre-wrap sm:text-lg sm:leading-8"
+									class="mt-4 scroll-mt-28 text-base leading-7 font-medium wrap-anywhere whitespace-pre-wrap sm:text-lg sm:leading-8"
 								>
 									{#each q.content.split(/\n\s*\n|\n(?=\s*(?:\d+[.)]|[①-⑳]|\[))/) as paragraph}<span
 											class="mb-3 block last:mb-0">{paragraph}</span
@@ -744,9 +768,10 @@
 								>
 							</div>
 							{#if q.type === 'multiple'}
-								<div class="mt-5 border border-[#cfd8df]">
+								<fieldset class="mt-5 min-w-0 border border-[#cfd8df]">
+									<legend class="sr-only">문제 {index + 1} 보기</legend>
 									{#each q.options as option, i}<label
-											class="flex cursor-pointer gap-3 border-b border-[#dfe4e9] bg-white px-4 py-3 last:border-0 hover:bg-[#f5fbfd]"
+											class="exam-option flex cursor-pointer items-start gap-3 border-b border-[#dfe4e9] px-3 py-3 last:border-0 sm:px-4"
 											>{#if q.allowsMultipleAnswers}
 												<input
 													type="checkbox"
@@ -755,7 +780,7 @@
 													disabled={answerLocked}
 													checked={selectedChoiceIndices(values[q.id]).includes(i)}
 													onchange={() => selectChoice(i)}
-													class="mt-0.5"
+													class="mt-1 size-4 shrink-0 accent-[#087ba8]"
 												/>
 											{:else}
 												<input
@@ -765,13 +790,13 @@
 													disabled={answerLocked}
 													bind:group={values[q.id]}
 													onchange={() => save(q.id)}
-													class="mt-0.5"
+													class="mt-1 size-4 shrink-0 accent-[#087ba8]"
 												/>
-											{/if}<span class="text-sm leading-6"
+											{/if}<span class="min-w-0 text-sm leading-6 wrap-anywhere"
 												><b class="mr-2 text-[#087ba8]">{i + 1}.</b>{option}</span
 											></label
 										>{/each}
-								</div>
+								</fieldset>
 								{#if q.allowsMultipleAnswers}
 									<p class="mt-3 text-xs text-[#6a7684]">
 										복수 선택 문제입니다. 해당하는 보기를 모두 선택하세요.
@@ -792,7 +817,9 @@
 								<p id="answer-limit" class="mt-2 text-xs text-[#6a7684]">
 									최대 10,000자 · {(values[q.id] ?? '').length.toLocaleString('ko-KR')}자 작성
 								</p>{/if}
-							<div class="mt-8 flex justify-between border-t-2 border-[#34404d] pt-5">
+							<div
+								class="mt-8 flex flex-wrap justify-between gap-2 border-t-2 border-[#34404d] pt-5"
+							>
 								<button
 									type="button"
 									class="btn-secondary"
@@ -860,3 +887,23 @@
 		</AlertDialog.Content>
 	</AlertDialog.Root>
 {/if}
+
+<style>
+	.exam-option:hover {
+		background: var(--app-surface-muted);
+	}
+
+	.exam-option:has(input:checked) {
+		background: var(--app-accent-soft);
+	}
+
+	.exam-option:has(input:focus-visible) {
+		position: relative;
+		outline: 2px solid var(--app-accent);
+		outline-offset: -2px;
+	}
+
+	.exam-option:has(input:disabled) {
+		cursor: default;
+	}
+</style>
