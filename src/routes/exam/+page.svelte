@@ -14,8 +14,6 @@
 
 	type ExamSession = ExamAttempt & {
 		submittedAt?: string;
-		objectiveScore?: number;
-		objectiveMaxScore?: number;
 		answeredCount?: number;
 		questionCount?: number;
 		timedOut?: boolean;
@@ -687,16 +685,8 @@
 			<div class="w-full">
 				<p class="eyebrow">SUBMISSION COMPLETE</p>
 				<h1 class="mt-3 text-[28px] font-bold tracking-[-.04em]">답안이 제출되었습니다.</h1>
-				<div class="mt-7 border-y border-[#c8d0d9] py-6">
-					<p class="text-xs font-semibold tracking-widest text-[#6a7684]">객관식 점수</p>
-					<p class="mt-2 font-mono text-4xl font-bold tracking-[-.04em] text-[#087ba8]">
-						{attempt.objectiveScore}
-						<span class="ml-2 text-xl text-[#6a7684]">/ {attempt.objectiveMaxScore}</span>
-					</p>
-				</div>
 				<p class="mt-5 text-sm leading-6 text-[#6a7684]">
-					객관식 점수만 즉시 공개됩니다. 단답·서술·논술형 점수와 총점은 운영진만 확인하며, 제출
-					이후에는 답안을 변경할 수 없습니다.
+					시험 결과는 운영진만 확인할 수 있습니다. 제출 이후에는 답안을 변경할 수 없습니다.
 				</p>
 				{#if attempt.answeredCount !== undefined}
 					<p class="mt-4 text-sm leading-6 text-[#52616e]">

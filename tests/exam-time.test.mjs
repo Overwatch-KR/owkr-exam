@@ -338,11 +338,27 @@ try {
 	fixtureAnswers = [{ attemptQuestionId: 'one', value: '0' }];
 	const receipt = await submitExam({ attemptId: 'attempt' }, user);
 	assert.equal(receipt.timedOut, true);
-	assert.equal(receipt.objectiveScore, 2);
+	assert.equal(row.objectiveScore, 2);
+	assert.deepEqual(Object.keys(receipt).sort(), [
+		'answeredCount',
+		'questionCount',
+		'submittedAt',
+		'timedOut'
+	]);
 	assert.equal(receipt.answeredCount, 1);
 	assert.equal(receipt.questionCount, 2);
 	assert.deepEqual(await submitExam({ attemptId: 'attempt' }, user), receipt);
 	assert.equal(writes, 1);
+	checks++;
+
+	reset();
+	fixtureQuestions = [{ id: 'one', type: 'multiple', correctAnswer: 0, points: 2 }];
+	fixtureAnswers = [{ attemptQuestionId: 'one', value: '0' }];
+	const manualReceipt = await submitExam({ attemptId: 'attempt' }, user);
+	assert.equal(manualReceipt.timedOut, false);
+	assert.equal(row.objectiveScore, 2);
+	assert.equal(row.totalScore, 2);
+	assert.deepEqual(Object.keys(manualReceipt).sort(), Object.keys(receipt).sort());
 	checks++;
 
 	reset({ pausedAt: new Date(now), expiresAt: new Date(now - 1) });

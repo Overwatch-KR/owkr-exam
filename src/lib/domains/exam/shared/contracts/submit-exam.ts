@@ -7,8 +7,6 @@ export const submitExamInputSchema = z.object({
 });
 export const submitExamResultSchema = z.object({
 	submittedAt: z.iso.datetime(),
-	objectiveScore: z.number().nonnegative(),
-	objectiveMaxScore: z.number().nonnegative(),
 	answeredCount: z.number().int().nonnegative().optional(),
 	questionCount: z.number().int().nonnegative().optional(),
 	timedOut: z.boolean().optional()

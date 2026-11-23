@@ -26,17 +26,12 @@ export async function submitExam(
 	}
 
 	const questions = await db
-		.select({ type: examQuestions.type, points: examQuestions.points, value: answers.value })
+		.select({ value: answers.value })
 		.from(examQuestions)
 		.leftJoin(answers, eq(answers.attemptQuestionId, examQuestions.id))
 		.where(eq(examQuestions.attemptId, attempt.id));
-	const objectiveMaxScore = questions
-		.filter((question) => question.type === 'multiple')
-		.reduce((sum, question) => sum + question.points, 0);
 	return {
 		submittedAt: completed.submittedAt.toISOString(),
-		objectiveScore: completed.objectiveScore,
-		objectiveMaxScore,
 		answeredCount: questions.filter((question) => question.value?.trim()).length,
 		questionCount: questions.length,
 		timedOut: completed.timedOut
